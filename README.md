@@ -1,4 +1,4 @@
-# 💒 Sarah & Michael Wedding Website
+# 💒 Shiela & Erwin Wedding Website
 
 A beautiful, modern, and interactive wedding website built with Next.js 16, TailwindCSS, and Framer Motion.
 
