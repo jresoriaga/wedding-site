@@ -134,9 +134,9 @@ function ItineraryContent() {
           </div>
 
           {/* ── Day strip (left) + Content (right) ────────────────────── */}
-          <div className="flex gap-4">
-            {/* Vertical day tabs + clear CTA */}
-            <div className="flex-shrink-0 flex flex-col items-center gap-2">
+          <div className="flex gap-4 items-start">
+            {/* Vertical day tabs + clear CTA — sticky so always visible while scrolling */}
+            <div className="flex-shrink-0 flex flex-col items-center gap-2 sticky top-16 self-start z-10">
               <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center leading-none">
                 Day
               </p>
@@ -159,36 +159,41 @@ function ItineraryContent() {
             </div>
 
             {/* Right: filters + map + cards */}
-            <div className="flex-1 min-w-0 space-y-4">
-              {/* Category tabs */}
-              <CategoryTabs active={activeCategory} onChange={handleTabChange} />
+            <div className="flex-1 min-w-0">
+              {/* ── Sticky controls bar: category + vibes + map button ── */}
+              <div className="sticky top-14 z-20 bg-[#FBE9D0]/95 backdrop-blur-sm -mx-1 px-1 pt-1 pb-3 space-y-3">
+                {/* Category tabs */}
+                <CategoryTabs active={activeCategory} onChange={handleTabChange} />
 
-              {/* Vibe filter */}
-              <VibeFilter selected={selectedVibes} onChange={setSelectedVibes} />
+                {/* Vibe filter */}
+                <VibeFilter selected={selectedVibes} onChange={setSelectedVibes} />
 
-              {/* Map toggle row */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-400 font-medium">
-                  {filteredVenues.length} spot{filteredVenues.length !== 1 ? 's' : ''}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowMap((v) => !v)}
-                  aria-expanded={showMap}
-                  aria-controls="inline-map"
-                  className={`
-                    flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
-                    border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ocean
-                    ${showMap
-                      ? 'border-ocean bg-ocean text-white shadow-sm shadow-ocean/30'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-ocean hover:text-ocean'
-                    }
-                  `}
-                >
-                  🗺️ {showMap ? 'Hide map' : 'Show map'}
-                </button>
+                {/* Map toggle row */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-400 font-medium">
+                    {filteredVenues.length} spot{filteredVenues.length !== 1 ? 's' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowMap((v) => !v)}
+                    aria-expanded={showMap}
+                    aria-controls="inline-map"
+                    className={`
+                      flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
+                      border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ocean
+                      ${showMap
+                        ? 'border-ocean bg-ocean text-white shadow-sm shadow-ocean/30'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-ocean hover:text-ocean'
+                      }
+                    `}
+                  >
+                    🗺️ {showMap ? 'Hide map' : 'Show map'}
+                  </button>
+                </div>
               </div>
 
+              {/* ── Scrollable content: map + venue grid ── */}
+              <div className="space-y-4">
               {/* Inline map */}
               {showMap && (
                 <div id="inline-map" className="animate-fade-in">
@@ -229,6 +234,7 @@ function ItineraryContent() {
                   </div>
                 )}
               </div>
+              </div>{/* end scrollable content */}
             </div>
           </div>
         </div>
