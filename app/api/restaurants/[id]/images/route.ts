@@ -8,20 +8,27 @@ type Params = { params: Promise<{ id: string }> }
 
 // GET /api/restaurants/[id]/images — public, lists images for a venue [AC-ITINPLAN0306-F13]
 export async function GET(_req: Request, { params }: Params) {
-  const { id } = await params
-  const supabase = createServerClient()
+  try {
+    const { id } = await params
+    const supabase = createServerClient()
 
-  const { data, error } = await supabase
-    .from('restaurant_images')
-    .select('id, image_url, uploaded_by, created_at')
-    .eq('venue_id', id)
-    .order('created_at', { ascending: true })
+    const { data, error } = await supabase
+      .from('restaurant_images')
+      .select('id, image_url, uploaded_by, created_at')
+      .eq('venue_id', id)
+      .order('created_at', { ascending: true })
 
-  if (error) {
-    return NextResponse.json([], { status: 200 })
+    if (error) {
+      console.error('[GET images] Supabase query error:', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json(data ?? [])
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error'
+    console.error('[GET images] Uncaught error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  return NextResponse.json(data ?? [])
 }
 
 // POST /api/restaurants/[id]/images — Joef-only image upload [AC-ITINPLAN0306-F12, S4, S5]
