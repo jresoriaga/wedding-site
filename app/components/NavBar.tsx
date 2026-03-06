@@ -21,7 +21,7 @@ export default function NavBar() {
       >
         <Link href="/itinerary" className="flex items-center gap-2 text-white font-bold text-lg">
           <span aria-hidden="true">🌊</span>
-          <span>LU Outing</span>
+          <span>LU Itenerary Planner</span>
         </Link>
         <div className="flex items-center gap-1" role="menubar">
           {NAV_ITEMS.map(({ href, label, emoji }) => {
