@@ -7,6 +7,7 @@ interface RestaurantCardProps {
   voteCount: number
   voterNames?: string[]
   onToggle: (venueId: string) => void
+  onInfoClick: (venue: Venue) => void
 }
 
 const VIBE_COLORS: Record<string, string> = {
@@ -25,18 +26,28 @@ export default function RestaurantCard({
   voteCount,
   voterNames = [],
   onToggle,
+  onInfoClick,
 }: RestaurantCardProps) {
+  function handleToggle(e: React.MouseEvent | React.KeyboardEvent) {
+    // Allow keyboard activation on the card itself
+    if ('key' in e && e.key !== 'Enter' && e.key !== ' ') return
+    onToggle(venue.id)
+  }
+
   return (
-    <button
-      type="button"
+    // Outer div acts as a card container; remove button is a real <button> inside [WCAG:4.1.2]
+    <div
       data-testid={`restaurant-card-${venue.id}`}
+      role="button"
+      tabIndex={0}
       aria-pressed={selected}
-      aria-label={`${venue.name}${selected ? ', selected' : ''}`}
-      onClick={() => onToggle(venue.id)}
+      aria-label={`${venue.name}${selected ? ', selected — press to remove vote' : ' — press to vote'}`}
+      onClick={handleToggle}
+      onKeyDown={handleToggle}
       className={`
         w-full text-left rounded-2xl border-2 p-4 transition-all duration-200
         focus:outline-none focus:ring-2 focus:ring-ocean focus:ring-offset-2
-        active:scale-[0.98] cursor-pointer group
+        active:scale-[0.98] cursor-pointer group relative
         ${selected
           ? 'border-ocean bg-ocean/5 shadow-md shadow-ocean/20'
           : 'border-gray-200 bg-white hover:border-ocean/40 hover:shadow-sm'
@@ -52,9 +63,6 @@ export default function RestaurantCard({
               {/* [OWASP:A3] JSX renders names as text — no dangerouslySetInnerHTML [AC-ITINPLAN0306-S3] */}
               {venue.name}
             </h3>
-            {selected && (
-              <span className="text-ocean text-lg" aria-hidden="true">✓</span>
-            )}
           </div>
 
           <p className="text-gray-500 text-xs mb-2 truncate">
@@ -80,20 +88,35 @@ export default function RestaurantCard({
           </div>
         </div>
 
-        {/* Vote badge */}
-        <div className="flex flex-col items-center gap-1 flex-shrink-0">
-          <div
-            className={`
-              w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
-              ${voteCount > 0
-                ? 'bg-coral text-white shadow-sm shadow-coral/30'
-                : 'bg-gray-100 text-gray-400'
-              }
-            `}
-            aria-label={`${voteCount} vote${voteCount !== 1 ? 's' : ''}`}
-          >
-            {voteCount}
-          </div>
+        {/* Right side: vote badge or remove button */}
+        <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+          {selected ? (
+            /* Explicit remove button [WCAG:2.4.6] */
+            <button
+              type="button"
+              aria-label={`Remove vote for ${venue.name}`}
+              onClick={(e) => {
+                e.stopPropagation() // prevent card click from re-toggling
+                onToggle(venue.id)
+              }}
+              className="w-10 h-10 rounded-full bg-coral text-white flex items-center justify-center text-lg font-bold shadow-sm shadow-coral/30 hover:bg-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-coral focus:ring-offset-2"
+            >
+              ✕
+            </button>
+          ) : (
+            <div
+              className={`
+                w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
+                ${voteCount > 0
+                  ? 'bg-coral text-white shadow-sm shadow-coral/30'
+                  : 'bg-gray-100 text-gray-400'
+                }
+              `}
+              aria-label={`${voteCount} vote${voteCount !== 1 ? 's' : ''}`}
+            >
+              {voteCount}
+            </div>
+          )}
           {voterNames.length > 0 && (
             <span className="text-xs text-gray-400" title={voterNames.join(', ')}>
               votes
@@ -101,6 +124,27 @@ export default function RestaurantCard({
           )}
         </div>
       </div>
-    </button>
+
+      {/* "Tap to vote / tap ✕ to remove" hint */}
+      {selected && (
+        <p className="text-xs text-ocean/70 mt-2 font-medium">✓ Your vote — tap ✕ to remove</p>
+      )}
+
+      {/* See menu link — stopPropagation so the card vote toggle isn't also triggered */}
+      <div className="mt-3 pt-3 border-t border-gray-100">
+        <button
+          type="button"
+          aria-label={`See menu and details for ${venue.name}`}
+          onClick={(e) => {
+            e.stopPropagation()
+            onInfoClick(venue)
+          }}
+          className="text-xs font-semibold text-ocean hover:text-ocean/70 flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-ocean rounded transition-colors"
+        >
+          📌 See menu &amp; details
+        </button>
+      </div>
+    </div>
   )
 }
+

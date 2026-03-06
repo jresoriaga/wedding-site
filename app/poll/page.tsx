@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/app/lib/store'
 import PollCategorySection from '@/app/components/PollCategorySection'
+import DayTabs from '@/app/components/DayTabs'
 import { usePollStream } from '@/app/hooks/usePollStream'
 
 export default function PollPage() {
@@ -11,6 +12,8 @@ export default function PollPage() {
   const userName = useAppStore((s) => s.userName)
   const pollData = useAppStore((s) => s.pollData)
   const isReconnecting = useAppStore((s) => s.isReconnecting)
+  const activeDay = useAppStore((s) => s.activeDay)
+  const setActiveDay = useAppStore((s) => s.setActiveDay)
 
   usePollStream()
 
@@ -43,6 +46,9 @@ export default function PollPage() {
           </div>
         </div>
       </div>
+
+      {/* Day selector */}
+      <DayTabs active={activeDay} onChange={setActiveDay} />
 
       {/* Reconnecting banner [AC-ITINPLAN0306-ERR2] */}
       {isReconnecting && (

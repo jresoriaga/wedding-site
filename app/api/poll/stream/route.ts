@@ -8,15 +8,28 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { registerWriter, broadcast } from '@/app/lib/sseRegistry'
 import { createServerClient } from '@/app/lib/supabase'
+import { memGetVotes } from '@/app/lib/memoryStore'
+
+const useSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL)
 
 // Heartbeat every 25s to keep connection alive through proxies/load balancers
 const HEARTBEAT_INTERVAL_MS = 25_000
 
 export async function GET() {
-  const supabase = createServerClient()
-
   // Fetch initial votes to send on connect
-  const { data: initialVotes } = await supabase.from('votes').select('*')
+  let initialVotes: unknown[] = []
+  if (useSupabase) {
+    const supabase = createServerClient()
+    const { data, error } = await supabase.from('votes').select('*')
+    if (!error) {
+      initialVotes = data ?? []
+    } else {
+      // Table not yet created — fall back to in-memory silently
+      initialVotes = memGetVotes()
+    }
+  } else {
+    initialVotes = memGetVotes()
+  }
 
   const stream = new TransformStream()
   const writer = stream.writable.getWriter()
@@ -34,7 +47,7 @@ export async function GET() {
   const unregister = registerWriter({ write, close })
 
   // Send initial state immediately on connect
-  write(`event: votes\ndata: ${JSON.stringify(initialVotes ?? [])}\n\n`)
+  write(`event: votes\ndata: ${JSON.stringify(initialVotes)}\n\n`)
 
   // Heartbeat to prevent connection timeout [AC-ITINPLAN0306-ERR2]
   const heartbeat = setInterval(() => {

@@ -23,6 +23,7 @@ describe('RestaurantCard', () => {
         selected={false}
         voteCount={3}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
     expect(screen.getByText('Elyu Café')).toBeInTheDocument()
@@ -39,6 +40,7 @@ describe('RestaurantCard', () => {
         selected={true}
         voteCount={1}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
     expect(screen.getByTestId('restaurant-card-test-01')).toHaveAttribute(
@@ -56,6 +58,7 @@ describe('RestaurantCard', () => {
         selected={false}
         voteCount={0}
         onToggle={onToggle}
+        onInfoClick={vi.fn()}
       />
     )
     await user.click(screen.getByTestId('restaurant-card-test-01'))
@@ -69,6 +72,7 @@ describe('RestaurantCard', () => {
         selected={false}
         voteCount={0}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
     expect(screen.getByTestId('restaurant-card-test-01')).toBeInTheDocument()
@@ -86,6 +90,7 @@ describe('RestaurantCard', () => {
         selected={false}
         voteCount={0}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
     // No script tag should exist in DOM

@@ -40,12 +40,12 @@ const mockVenueMap: Record<string, Venue> = {
 
 describe('MapView', () => {
   beforeEach(() => {
-    // Simulate API key present
-    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_KEY', 'test-key')
+    // Simulate API key present — must match NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
   })
 
   it('[AC-ITINPLAN0306-ERR3] shows fallback message when API key is missing', () => {
-    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_KEY', '')
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', '')
     render(<MapView votes={[]} venueMap={mockVenueMap} />)
     expect(screen.getByTestId('map-view')).toBeInTheDocument()
     expect(screen.getByText(/map unavailable/i)).toBeInTheDocument()
@@ -58,8 +58,9 @@ describe('MapView', () => {
   })
 
   it('[AC-ITINPLAN0306-F8] renders map container with votes present', () => {
+    // votes now carry day prefix (d1:, d2:, d3:)
     const votes: Vote[] = [
-      { id: 'v1', venue_id: 'b-01', voter_name: 'Maria', created_at: '' },
+      { id: 'v1', venue_id: 'd1:b-01', voter_name: 'Maria', created_at: '' },
     ]
     render(<MapView votes={votes} venueMap={mockVenueMap} />)
     expect(screen.getByTestId('map-view')).toBeInTheDocument()
@@ -67,7 +68,7 @@ describe('MapView', () => {
 
   it('[AC-ITINPLAN0306-F8] only renders markers for venues with ≥1 vote', () => {
     const votes: Vote[] = [
-      { id: 'v1', venue_id: 'b-01', voter_name: 'Maria', created_at: '' },
+      { id: 'v1', venue_id: 'd1:b-01', voter_name: 'Maria', created_at: '' },
     ]
     render(<MapView votes={votes} venueMap={mockVenueMap} />)
     expect(screen.getByTestId('marker-Elyu Café')).toBeInTheDocument()

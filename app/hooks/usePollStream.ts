@@ -2,7 +2,7 @@
 import { useEffect, useCallback } from 'react'
 import { useAppStore } from '@/app/lib/store'
 import { rankVenues } from '@/app/lib/rankVenues'
-import type { Vote, PollData } from '@/app/lib/types'
+import type { Vote, PollData, Day } from '@/app/lib/types'
 
 const MAX_RETRIES = 5
 const BASE_DELAY_MS = 1000
@@ -12,12 +12,19 @@ export function usePollStream() {
   const setPollData = useAppStore((s) => s.setPollData)
   const setAllVotes = useAppStore((s) => s.setAllVotes)
   const setIsReconnecting = useAppStore((s) => s.setIsReconnecting)
+  const activeDay = useAppStore((s) => s.activeDay)
+  const allVotes = useAppStore((s) => s.allVotes)
 
-  const buildPollData = useCallback((votes: Vote[]): PollData => ({
-    breakfast: rankVenues(votes, 'breakfast'),
-    lunch: rankVenues(votes, 'lunch'),
-    dinner: rankVenues(votes, 'dinner'),
+  const buildPollData = useCallback((votes: Vote[], day: Day): PollData => ({
+    breakfast: rankVenues(votes, 'breakfast', day),
+    lunch: rankVenues(votes, 'lunch', day),
+    dinner: rankVenues(votes, 'dinner', day),
   }), [])
+
+  // Re-derive poll data whenever the active day changes [Day 1/2/3 support]
+  useEffect(() => {
+    setPollData(buildPollData(allVotes, activeDay))
+  }, [activeDay, allVotes, buildPollData, setPollData])
 
   useEffect(() => {
     let es: EventSource | null = null
@@ -38,7 +45,19 @@ export function usePollStream() {
         try {
           const votes: Vote[] = JSON.parse(event.data)
           setAllVotes(votes)
-          setPollData(buildPollData(votes))
+          // Seed selectedVenueIds from server so the UI reflects persisted votes
+          // (handles page refresh / reconnect where Zustand state was lost)
+          const currentUser = useAppStore.getState().userName
+          if (currentUser) {
+            const myIds = new Set(
+              votes
+                .filter((v) => v.voter_name === currentUser)
+                .map((v) => v.venue_id)
+            )
+            useAppStore.getState().setSelectedVenueIds(myIds)
+          }
+          // pollData will be derived by the effect above when allVotes updates
+          setPollData(buildPollData(votes, useAppStore.getState().activeDay))
         } catch (err) {
           console.error('[usePollStream] Failed to parse votes event', err)
         }
@@ -72,3 +91,4 @@ export function usePollStream() {
     }
   }, [buildPollData, setPollData, setAllVotes, setIsReconnecting])
 }
+

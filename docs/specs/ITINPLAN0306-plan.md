@@ -534,4 +534,89 @@ Cycle 18 (error boundary)
 Cycle 19 (design system)
 Cycle 20 (performance)
 Cycle 21 (infra / env)
+--- PLAN AMENDMENT (2026-03-07) ---
+Cycle 22 (GET /api/restaurants + useRestaurants hook)
+Cycle 23 (POST /api/restaurants/[id]/images — Joef upload, security)
+Cycle 24 (GET /api/restaurants/[id]/images + useVenueImages hook)
+Cycle 25 (VenueDetailModal — carousel + persistent images)
+Cycle 26 (POST /api/restaurants — Joef creates restaurant)
+Cycle 27 (AdminRestaurantModal)
+Cycle 28 (wire dynamic restaurants + Admin FAB in itinerary/page.tsx)
+```
+
+---
+
+## Plan Amendment: Restaurant & Image Management (2026-03-07)
+
+**New AC IDs:**
+
+| ID | Description |
+|----|-------------|
+| `AC-ITINPLAN0306-F11` | Dynamic restaurant loading from Supabase `restaurants` table (static fallback) |
+| `AC-ITINPLAN0306-F12` | Joef uploads image → Supabase Storage → persisted URL visible to all users |
+| `AC-ITINPLAN0306-F13` | All users see image carousel/slider + fullscreen lightbox in `VenueDetailModal` |
+| `AC-ITINPLAN0306-F14` | Joef creates new restaurant via form → inserted into `restaurants` table |
+| `AC-ITINPLAN0306-S4` | Server-side admin gate: only `uploaded_by === 'Joef'` may POST images/restaurants |
+| `AC-ITINPLAN0306-S5` | Image upload validates file type (image/* only) and size (≤ 5 MB) server-side |
+
+---
+
+### Cycle 22: [AC-ITINPLAN0306-F11] `GET /api/restaurants` + `useRestaurants` hook
+
+- **Files**: `app/api/restaurants/route.ts` (create), `app/hooks/useRestaurants.ts` (create), `app/api/restaurants/__tests__/route.test.ts` (create)
+
+### Cycle 23: [AC-ITINPLAN0306-F12, S4, S5] `POST /api/restaurants/[id]/images`
+
+- **Files**: `app/api/restaurants/[id]/images/route.ts` (create), `app/api/restaurants/[id]/images/__tests__/route.test.ts` (create)
+
+### Cycle 24: [AC-ITINPLAN0306-F12, F13] `GET /api/restaurants/[id]/images` + `useVenueImages` hook
+
+- **Files**: `app/hooks/useVenueImages.ts` (create), `app/hooks/__tests__/useVenueImages.test.ts` (create)
+
+### Cycle 25: [AC-ITINPLAN0306-F13] `VenueDetailModal` — carousel + persistent images
+
+- **Files**: `app/components/VenueDetailModal.tsx` (modify), `app/components/__tests__/VenueDetailModal.test.tsx` (create)
+
+### Cycle 26: [AC-ITINPLAN0306-F14, S4] `POST /api/restaurants`
+
+- **Files**: `app/api/restaurants/route.ts` (modify)
+
+### Cycle 27: [AC-ITINPLAN0306-F14] `AdminRestaurantModal`
+
+- **Files**: `app/components/AdminRestaurantModal.tsx` (create), `app/components/__tests__/AdminRestaurantModal.test.tsx` (create)
+
+### Cycle 28: [AC-ITINPLAN0306-F11, F14] Wire dynamic restaurants + Admin FAB
+
+- **Files**: `app/itinerary/page.tsx` (modify), `app/itinerary/__tests__/page.test.tsx` (modify)
+
+### New Schema Dependencies
+
+```sql
+CREATE TABLE restaurants (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  category text NOT NULL CHECK (category IN ('breakfast','lunch','dinner')),
+  vibe text[] NOT NULL DEFAULT '{}',
+  address text NOT NULL,
+  lat double precision NOT NULL,
+  lng double precision NOT NULL,
+  hours text,
+  description text,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE restaurant_images (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  venue_id text NOT NULL REFERENCES restaurants(id) ON DELETE CASCADE,
+  image_url text NOT NULL,
+  uploaded_by text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+CREATE INDEX restaurant_images_venue_idx ON restaurant_images(venue_id);
+
+-- Storage bucket: create 'restaurant-images' as PUBLIC in Supabase dashboard
+ALTER TABLE restaurants ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can read restaurants" ON restaurants FOR SELECT TO anon USING (true);
+ALTER TABLE restaurant_images ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can read images" ON restaurant_images FOR SELECT TO anon USING (true);
 ```

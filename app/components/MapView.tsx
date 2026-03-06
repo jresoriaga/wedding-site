@@ -1,6 +1,6 @@
 'use client'
 import { APIProvider, Map, AdvancedMarker, InfoWindow } from '@vis.gl/react-google-maps'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { Venue, Vote } from '@/app/lib/types'
 
 interface MapViewProps {
@@ -11,23 +11,33 @@ interface MapViewProps {
 // La Union, Philippines center
 const LA_UNION_CENTER = { lat: 16.6197, lng: 120.3199 }
 
+// Strip day prefix (e.g. "d1:el-union-coffee" → "el-union-coffee")
+function baseId(venueId: string): string {
+  return venueId.replace(/^d[1-3]:/, '')
+}
+
 // [AC-ITINPLAN0306-F8, E4, ERR3]
 export default function MapView({ votes, venueMap }: MapViewProps) {
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null)
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
-  // Build vote count map O(n) — no nested loops [vercel-react-best-practices]
-  const voteCountByVenue: Record<string, number> = {}
-  const votersByVenue: Record<string, string[]> = {}
-  for (const vote of votes) {
-    voteCountByVenue[vote.venue_id] = (voteCountByVenue[vote.venue_id] ?? 0) + 1
-    votersByVenue[vote.venue_id] = votersByVenue[vote.venue_id] ?? []
-    votersByVenue[vote.venue_id].push(vote.voter_name)
-  }
+  // Build vote count map — strip day prefix before looking up venueMap
+  const { voteCountByVenue, votersByVenue } = useMemo(() => {
+    const counts: Record<string, number> = {}
+    const voters: Record<string, string[]> = {}
+    for (const vote of votes) {
+      const id = baseId(vote.venue_id)
+      counts[id] = (counts[id] ?? 0) + 1
+      voters[id] = voters[id] ?? []
+      voters[id].push(vote.voter_name)
+    }
+    return { voteCountByVenue: counts, votersByVenue: voters }
+  }, [votes])
 
   // Only venues with ≥1 vote get a pin [AC-ITINPLAN0306-F8]
-  const votedVenues = Object.values(venueMap).filter(
-    (v) => (voteCountByVenue[v.id] ?? 0) > 0
+  const votedVenues = useMemo(
+    () => Object.values(venueMap).filter((v) => (voteCountByVenue[v.id] ?? 0) > 0),
+    [venueMap, voteCountByVenue]
   )
 
   // [AC-ITINPLAN0306-ERR3] Missing API key fallback
@@ -35,15 +45,11 @@ export default function MapView({ votes, venueMap }: MapViewProps) {
     return (
       <div
         data-testid="map-view"
-        className="flex flex-col items-center justify-center h-64 gap-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 p-8 text-center"
+        className="flex flex-col items-center justify-center h-48 gap-3 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 p-6 text-center"
       >
-        <span className="text-4xl" aria-hidden="true">🗺️</span>
-        <p className="text-gray-500 font-medium">
-          Map unavailable — check your API key
-        </p>
-        <p className="text-gray-400 text-xs">
-          Set <code className="bg-gray-100 px-1 rounded">NEXT_PUBLIC_GOOGLE_MAPS_KEY</code> in{' '}
-          <code className="bg-gray-100 px-1 rounded">.env.local</code>
+        <span className="text-3xl" aria-hidden="true">🗺️</span>
+        <p className="text-gray-500 font-medium text-sm">
+          Map unavailable — add <code className="bg-gray-100 px-1 rounded text-xs">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to <code className="bg-gray-100 px-1 rounded text-xs">.env.local</code>
         </p>
       </div>
     )
@@ -61,14 +67,14 @@ export default function MapView({ votes, venueMap }: MapViewProps) {
             mapId="lu-outing-map"
             defaultCenter={LA_UNION_CENTER}
             defaultZoom={13}
-            style={{ width: '100%', height: '400px' }}
+            style={{ width: '100%', height: '300px' }}
             gestureHandling="greedy"
             disableDefaultUI={false}
           />
         </APIProvider>
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-white/90 backdrop-blur-sm rounded-2xl px-6 py-4 text-center shadow-lg">
-            <p className="text-2xl mb-2" aria-hidden="true">📍</p>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl px-5 py-3 text-center shadow-lg">
+            <p className="text-xl mb-1" aria-hidden="true">📍</p>
             <p className="font-semibold text-gray-700 text-sm">
               Vote on venues to see them on the map
             </p>
@@ -90,7 +96,7 @@ export default function MapView({ votes, venueMap }: MapViewProps) {
           mapId="lu-outing-map"
           defaultCenter={LA_UNION_CENTER}
           defaultZoom={13}
-          style={{ width: '100%', height: '500px' }}
+          style={{ width: '100%', height: '300px' }}
           gestureHandling="greedy"
         >
           {votedVenues.map((venue) => (
@@ -102,9 +108,9 @@ export default function MapView({ votes, venueMap }: MapViewProps) {
             >
               <div
                 className={`
-                  flex items-center justify-center w-10 h-10 rounded-full border-2 border-white
+                  flex items-center justify-center w-9 h-9 rounded-full border-2 border-white
                   shadow-lg cursor-pointer transition-transform hover:scale-110
-                  ${voteCountByVenue[venue.id] >= 3 ? 'bg-coral' : 'bg-ocean'}
+                  ${(voteCountByVenue[venue.id] ?? 0) >= 3 ? 'bg-coral' : 'bg-ocean'}
                   text-white font-bold text-sm
                 `}
               >
@@ -129,7 +135,7 @@ export default function MapView({ votes, venueMap }: MapViewProps) {
                 <p className="mt-1 font-semibold text-coral text-sm">
                   {voteCountByVenue[selectedVenue.id]} vote{voteCountByVenue[selectedVenue.id] !== 1 ? 's' : ''}
                 </p>
-                {votersByVenue[selectedVenue.id]?.length > 0 && (
+                {(votersByVenue[selectedVenue.id]?.length ?? 0) > 0 && (
                   <p className="text-gray-400 text-xs mt-0.5">
                     {votersByVenue[selectedVenue.id].join(', ')}
                   </p>
@@ -142,3 +148,4 @@ export default function MapView({ votes, venueMap }: MapViewProps) {
     </div>
   )
 }
+

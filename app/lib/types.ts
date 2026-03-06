@@ -2,6 +2,8 @@
 
 export type Category = 'breakfast' | 'lunch' | 'dinner'
 
+export type Day = 1 | 2 | 3
+
 export type Vibe =
   | 'party'
   | 'casual dining'
@@ -20,6 +22,8 @@ export interface Venue {
   lng: number
   imageUrl?: string
   description?: string
+  hours?: string          // e.g. "7:00 AM – 10:00 PM"
+  menuImages?: string[]   // URLs to menu / food photos
 }
 
 export interface Vote {

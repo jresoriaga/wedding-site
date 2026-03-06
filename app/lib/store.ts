@@ -1,6 +1,6 @@
 'use client'
 import { create } from 'zustand'
-import type { PollData, Vote } from './types'
+import type { Day, PollData, Vote } from './types'
 
 interface AppState {
   // User identity
@@ -24,6 +24,10 @@ interface AppState {
   // SSE connection state
   isReconnecting: boolean
   setIsReconnecting: (v: boolean) => void
+
+  // Active day (1 | 2 | 3)
+  activeDay: Day
+  setActiveDay: (day: Day) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -52,4 +56,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   isReconnecting: false,
   setIsReconnecting: (v) => set({ isReconnecting: v }),
+
+  activeDay: 1,
+  setActiveDay: (day) => set({ activeDay: day }),
 }))
