@@ -36,18 +36,14 @@ function ItineraryContent() {
   const [showMap, setShowMap] = useState(false)
   const [venueForDetail, setVenueForDetail] = useState<Venue | null>(null)
   const [showAdminModal, setShowAdminModal] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
 
   // [AC-ITINPLAN0306-F11] Dynamic restaurants from DB with static fallback
   const { venues, venueMap, refetch: refetchRestaurants } = useRestaurants()
 
-  // Auth guard — DB/Zustand is the only source of truth; no localStorage [AC-ITINPLAN0306-F1]
-  // On page refresh Zustand resets, so users re-enter their name (SSE re-seeds their votes)
+  // Auth guard — redirect effect only; loading is derived from userName directly [AC-ITINPLAN0306-F1]
   useEffect(() => {
     if (!userName) {
       router.replace('/')
-    } else {
-      setIsLoading(false)
     }
   }, [userName, router])
 
@@ -100,7 +96,7 @@ function ItineraryContent() {
     showToast(`Name changed to "${newName}" ✓`)
   }
 
-  if (isLoading) {
+  if (!userName) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-ocean animate-pulse text-lg">Loading…</div>
