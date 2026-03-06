@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/app/lib/supabase'
+import { createServerClient, createAdminClient } from '@/app/lib/supabase'
 import { RESTAURANTS } from '@/app/lib/restaurants'
 import type { Venue } from '@/app/lib/types'
 
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid category' }, { status: 400 })
   }
 
-  const supabase = createServerClient()
+  const supabase = createAdminClient() // service role — bypasses RLS for trusted server writes [OWASP:A1]
   const { data, error } = await supabase
     .from('restaurants')
     .insert({

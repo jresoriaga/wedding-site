@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@/app/lib/supabase'
+import { createServerClient, createAdminClient } from '@/app/lib/supabase'
 
 const MAX_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
 const BUCKET = 'restaurant-images'
@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'File exceeds 5 MB limit' }, { status: 413 })
   }
 
-  const supabase = createServerClient()
+  const supabase = createAdminClient() // service role — bypasses RLS for trusted server writes [OWASP:A1]
 
   // Upload to Supabase Storage
   const ext = file.name.split('.').pop() ?? 'jpg'

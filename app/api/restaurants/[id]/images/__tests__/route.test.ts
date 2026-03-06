@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/app/lib/supabase', () => ({
   createServerClient: vi.fn(),
+  createAdminClient: vi.fn(),
 }))
 
-import { createServerClient } from '@/app/lib/supabase'
+import { createServerClient, createAdminClient } from '@/app/lib/supabase'
 import { GET, POST } from '../route'
 
 const VENUE_ID = 'b-01'
@@ -103,6 +104,9 @@ describe('POST /api/restaurants/[id]/images', () => {
     const mockClient = mockSupabaseWithImages([])
     vi.mocked(createServerClient).mockReturnValue(
       mockClient as unknown as ReturnType<typeof createServerClient>
+    )
+    vi.mocked(createAdminClient).mockReturnValue(
+      mockClient as unknown as ReturnType<typeof createAdminClient>
     )
 
     const formData = new FormData()

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/app/lib/supabase', () => ({
   createServerClient: vi.fn(),
+  createAdminClient: vi.fn(),
 }))
 
 vi.mock('@/app/lib/restaurants', () => ({
@@ -27,7 +28,7 @@ vi.mock('@/app/lib/restaurants', () => ({
   ],
 }))
 
-import { createServerClient } from '@/app/lib/supabase'
+import { createServerClient, createAdminClient } from '@/app/lib/supabase'
 import { RESTAURANTS } from '@/app/lib/restaurants'
 import { GET, POST } from '../route'
 
@@ -121,6 +122,7 @@ describe('POST /api/restaurants', () => {
       }),
     }
     vi.mocked(createServerClient).mockReturnValue(mockSupabase as unknown as ReturnType<typeof createServerClient>)
+    vi.mocked(createAdminClient).mockReturnValue(mockSupabase as unknown as ReturnType<typeof createAdminClient>)
 
     const req = new Request('http://localhost/api/restaurants', {
       method: 'POST',
