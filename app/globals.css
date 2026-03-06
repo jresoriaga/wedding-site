@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
-/* ── La Union Summer Design System ─────────────────────────────── */
+/* ── Prometheus Design System ─────────────────────────────── */
 :root {
-  --color-ocean: #1E6FA8;
-  --color-ocean-dark: #155b8e;
-  --color-sky: #7BC8E2;
-  --color-sand: #F5E6C8;
-  --color-coral: #FF6B6B;
-  --color-coral-dark: #e55a5a;
-  --color-palm: #2D6A4F;
-  --background: #f8f4ef;
-  --foreground: #1a1a2e;
+  --color-ocean: #244855;
+  --color-ocean-dark: #1C3943;
+  --color-sky: #90AEAD;
+  --color-sand: #FBE9D0;
+  --color-coral: #E64833;
+  --color-coral-dark: #C93E28;
+  --color-palm: #874F41;
+  --background: #FBE9D0;
+  --foreground: #244855;
 }
 
 @theme inline {
