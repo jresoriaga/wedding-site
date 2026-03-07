@@ -80,6 +80,16 @@ function ItineraryContent() {
     [allVotes, dayPrefix]
   )
 
+  // Votes for this day AND the active category (used for inline map)
+  const categoryDayVotes = useMemo(
+    () =>
+      dayVotes.filter((v) => {
+        const base = v.venue_id.slice(dayPrefix.length)
+        return venueMap[base]?.category === activeCategory
+      }),
+    [dayVotes, dayPrefix, venueMap, activeCategory]
+  )
+
   const filteredVenues = useMemo(
     () => filterVenues(venues, activeCategory, selectedVibes),
     [venues, activeCategory, selectedVibes]
@@ -193,7 +203,7 @@ function ItineraryContent() {
               {/* Inline map */}
               {showMap && (
                 <div id="inline-map" className="animate-fade-in">
-                  <MapView votes={dayVotes} venueMap={venueMap} />
+                  <MapView votes={categoryDayVotes} venueMap={venueMap} />
                 </div>
               )}
 
