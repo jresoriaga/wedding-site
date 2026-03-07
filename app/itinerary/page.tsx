@@ -132,7 +132,7 @@ function ItineraryContent() {
           {/* ── Day strip (left) + Content (right) ────────────────────── */}
           <div className="flex gap-4 items-start">
             {/* Vertical day tabs + clear CTA — sticky so always visible while scrolling */}
-            <div className="flex-shrink-0 flex flex-col items-center gap-2 sticky top-16 self-start z-10">
+            <div className="flex-shrink-0 flex flex-col items-center gap-2 sticky top-0 sm:top-16 self-start z-10">
               <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center leading-none">
                 Day
               </p>
@@ -157,7 +157,7 @@ function ItineraryContent() {
             {/* Right: filters + map + cards */}
             <div className="flex-1 min-w-0">
               {/* ── Sticky controls bar: category + vibes + map button ── */}
-              <div className="sticky top-14 z-20 bg-[#FBE9D0]/95 backdrop-blur-sm -mx-1 px-1 pt-1 pb-3 space-y-3">
+              <div className="sticky top-0 sm:top-14 z-20 bg-[#FBE9D0]/95 backdrop-blur-sm -mx-1 px-1 pt-1 pb-3 space-y-3">
                 {/* Category tabs */}
                 <CategoryTabs active={activeCategory} onChange={handleTabChange} />
 

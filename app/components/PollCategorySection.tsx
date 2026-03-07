@@ -64,11 +64,18 @@ export default function PollCategorySection({ category, entries }: PollCategoryS
                       aria-label={`${entry.voteCount} votes`}
                     />
                   </div>
-                  {/* Voter names on hover */}
+                  {/* Voter names — always visible so mobile users can see who voted */}
                   {entry.votes.length > 0 && (
-                    <p className="ml-7 mt-0.5 text-xs text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    <p className="ml-7 mt-1 text-xs text-gray-400 leading-snug">
                       {/* [OWASP:A3] voter_name rendered via JSX text content — safe [AC-ITINPLAN0306-S3] */}
-                      {entry.votes.map((v) => v.voter_name).join(', ')}
+                      {entry.votes.map((v) => (
+                        <span
+                          key={v.id}
+                          className="inline-flex items-center gap-0.5 mr-1 mb-0.5 px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-medium whitespace-nowrap"
+                        >
+                          {v.voter_name}
+                        </span>
+                      ))}
                     </p>
                   )}
                 </li>
