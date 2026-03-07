@@ -1,6 +1,8 @@
 // In-memory votes store — used as primary store when Supabase is not configured.
 // Single-instance only (local dev / single serverless function).
-import type { Vote } from './types'
+import type { Vote, ActivityVote } from './types'
+
+// ── Restaurant votes ──────────────────────────────────────────────────────────
 
 const votes = new Map<string, Vote>() // key: `${venue_id}::${voter_name}`
 
@@ -50,5 +52,44 @@ export function memClearDayVotes(voter_name: string, day_prefix: string): void {
     }
   }
   for (const k of toDelete) votes.delete(k)
+}
+
+// ── Activity votes ────────────────────────────────────────────────────────────
+
+const activityVotes = new Map<string, ActivityVote>() // key: `${activity_id}::${voter_name}`
+
+function actKey(activity_id: string, voter_name: string): string {
+  return `${activity_id}::${voter_name}`
+}
+
+export function memAddActivityVote(activity_id: string, voter_name: string): ActivityVote | null {
+  const k = actKey(activity_id, voter_name)
+  if (activityVotes.has(k)) return null
+  const vote: ActivityVote = {
+    id: k,
+    activity_id,
+    voter_name,
+    created_at: new Date().toISOString(),
+  }
+  activityVotes.set(k, vote)
+  return vote
+}
+
+export function memRemoveActivityVote(activity_id: string, voter_name: string): void {
+  activityVotes.delete(actKey(activity_id, voter_name))
+}
+
+export function memGetActivityVotes(): ActivityVote[] {
+  return Array.from(activityVotes.values())
+}
+
+export function memClearDayActivityVotes(voter_name: string, day_prefix: string): void {
+  const toDelete: string[] = []
+  for (const [k, vote] of activityVotes.entries()) {
+    if (vote.voter_name === voter_name && vote.activity_id.startsWith(day_prefix)) {
+      toDelete.push(k)
+    }
+  }
+  for (const k of toDelete) activityVotes.delete(k)
 }
 

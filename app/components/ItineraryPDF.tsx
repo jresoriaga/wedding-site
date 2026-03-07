@@ -3,7 +3,7 @@
 // Dynamically imported via useItineraryDownload — never statically imported in server components
 // @react-pdf/renderer uses browser canvas APIs; must be loaded client-side only
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
-import type { GeneratedItinerary, TripConfig, ItineraryMeal } from '@/app/lib/types'
+import type { GeneratedItinerary, TripConfig, ItineraryItem } from '@/app/lib/types'
 
 interface Props {
   itinerary: GeneratedItinerary
@@ -124,30 +124,37 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function MealEntry({ meal, isLast }: { meal: ItineraryMeal; isLast?: boolean }) {
-  const hasVote = meal.venue !== 'No votes yet'
+function TimelineItem({ item, isLast }: { item: ItineraryItem; isLast?: boolean }) {
+  const hasContent = item.name !== 'No votes yet' && item.name !== 'No activity selected'
+  const isActivity = item.type === 'activity'
+  const typeEmoji = isActivity ? '🎯' : '🍽️'
   return (
     <View style={isLast ? [s.mealContainer, s.mealContainerLast] : s.mealContainer}>
       {/* Time Column */}
       <View style={s.timeColumn}>
-        <Text style={s.mealType}>{meal.meal}</Text>
-        {hasVote && meal.suggestedTime !== '—' && (
-          <Text style={s.timeText}>{meal.suggestedTime}</Text>
+        <Text style={[s.mealType, isActivity ? { color: '#7c3aed' } : {}]}>
+          {typeEmoji} {item.label}
+        </Text>
+        {hasContent && item.startTime !== '—' && (
+          <Text style={s.timeText}>{item.startTime}</Text>
         )}
-        {hasVote && meal.duration && (
-          <Text style={s.durationText}>{meal.duration}</Text>
+        {hasContent && item.duration && (
+          <Text style={s.durationText}>{item.duration}</Text>
+        )}
+        {hasContent && item.distanceFromPrev !== '—' && (
+          <Text style={s.durationText}>📍 {item.distanceFromPrev}</Text>
         )}
       </View>
 
       {/* Details Column */}
       <View style={s.detailsColumn}>
-        <Text style={hasVote ? s.venueName : s.venueNoVote}>{meal.venue}</Text>
-        {hasVote && meal.address && (
-          <Text style={s.venueAddress}>{meal.address}</Text>
+        <Text style={hasContent ? s.venueName : s.venueNoVote}>{item.name}</Text>
+        {hasContent && item.address && (
+          <Text style={s.venueAddress}>{item.address}</Text>
         )}
-        {hasVote && meal.travelNote && meal.travelNote !== '—' && (
+        {hasContent && item.travelNote && item.travelNote !== '—' && (
           <View style={s.travelBox}>
-            <Text style={s.travelNote}>💡 {meal.travelNote}</Text>
+            <Text style={s.travelNote}>🚗 {item.travelNote}</Text>
           </View>
         )}
       </View>
@@ -179,11 +186,11 @@ export default function ItineraryPDF({ itinerary, tripConfig }: Props) {
             </View>
             
             <View>
-              {day.meals.map((meal, i) => (
-                <MealEntry 
-                  key={meal.meal} 
-                  meal={meal} 
-                  isLast={i === day.meals.length - 1} 
+              {day.items.map((item, i) => (
+                <TimelineItem 
+                  key={`${item.label}-${i}`} 
+                  item={item} 
+                  isLast={i === day.items.length - 1} 
                 />
               ))}
             </View>

@@ -74,6 +74,20 @@ export async function PUT(req: Request) {
 
   // Upsert via service-role client — bypasses RLS for trusted server write [OWASP:A1]
   const supabase = createAdminClient()
+
+  // Validate optional time fields [AC-ACTIVITIES-F13]
+  const timeFormat = /^\d{1,2}:\d{2}\s*(AM|PM)$/i
+  if (body.departure_time !== undefined && body.departure_time !== null && body.departure_time !== '') {
+    if (typeof body.departure_time !== 'string' || !timeFormat.test(body.departure_time as string)) {
+      return NextResponse.json({ error: 'departure_time must be in HH:MM AM/PM format' }, { status: 400 })
+    }
+  }
+  if (body.arrival_time !== undefined && body.arrival_time !== null && body.arrival_time !== '') {
+    if (typeof body.arrival_time !== 'string' || !timeFormat.test(body.arrival_time as string)) {
+      return NextResponse.json({ error: 'arrival_time must be in HH:MM AM/PM format' }, { status: 400 })
+    }
+  }
+
   const { data, error } = await supabase
     .from('trip_config')
     .upsert({
@@ -84,6 +98,8 @@ export async function PUT(req: Request) {
       stay_name: (body.stay_name as string).trim(),
       stay_lat: lat,
       stay_lng: lng,
+      ...(body.departure_time ? { departure_time: (body.departure_time as string).trim() } : {}),
+      ...(body.arrival_time ? { arrival_time: (body.arrival_time as string).trim() } : {}),
       updated_by: 'Joef',
       updated_at: new Date().toISOString(),
     })

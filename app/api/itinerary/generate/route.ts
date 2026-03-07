@@ -1,23 +1,11 @@
-import { NextResponse } from 'next/server'
-import OpenAI from 'openai'
+﻿import { NextResponse } from 'next/server'
 import { createServerClient } from '@/app/lib/supabase'
-import type { TripConfig, Venue, Vote, GeneratedItinerary } from '@/app/lib/types'
+import { buildDaySchedule } from '@/app/lib/scheduleBuilder'
+import { ACTIVITIES } from '@/app/lib/activities'
+import { RESTAURANTS } from '@/app/lib/restaurants'
+import type { TripConfig, Venue, Activity, Vote, ActivityVote, ItineraryItem } from '@/app/lib/types'
 
-// [AC-AITINPDF-S1] AI client is server-only — never imported in 'use client' files
-// [OWASP:A5] API key only accessed at request time, never at module level
-// Uses Groq (free tier) via OpenAI-compatible SDK — model: llama-3.3-70b-versatile
-function makeOpenAI(): OpenAI {
-  const key = process.env.GROQ_API_KEY
-  if (!key) throw new Error('GROQ_API_KEY not set')
-  return new OpenAI({
-    apiKey: key,
-    baseURL: 'https://api.groq.com/openai/v1',
-  })
-}
-
-const CATEGORIES = ['breakfast', 'lunch', 'dinner'] as const
-
-// [AC-AITINPDF-F3, F5] Top venue per category per day — most votes; alpha tie-break
+// [AC-ACTIVITIES-F16] Top venue per category per day â€” most votes; alpha tie-break
 // Returns null when no votes exist for the category on that day
 function getTopVenue(
   votes: Vote[],
@@ -38,7 +26,6 @@ function getTopVenue(
   const withVotes = catVenues.filter((v) => (counts[v.id] ?? 0) >= 1)
   if (withVotes.length === 0) return null
 
-  // Sort vote-count desc → name asc (stable, O(n log n))
   withVotes.sort((a, b) => {
     const voteDiff = (counts[b.id] ?? 0) - (counts[a.id] ?? 0)
     return voteDiff !== 0 ? voteDiff : a.name.localeCompare(b.name)
@@ -47,43 +34,75 @@ function getTopVenue(
   return withVotes[0]
 }
 
-// [OWASP:A3] Prompt injection hardening: venue names come from DB (trusted), no user text
-function buildUserContent(
-  cfg: TripConfig,
-  days: Array<{ day: number; date: string; venues: Record<string, Venue | null> }>,
-): string {
-  const header = [
-    `Trip: ${cfg.trip_name}`,
-    `Stay: ${cfg.stay_name} (lat ${cfg.stay_lat}, lng ${cfg.stay_lng})`,
-  ].join('\n')
+// [AC-ACTIVITIES-F16] Top activity per time-of-day per day â€” most votes; alpha tie-break
+// Activity vote IDs: "d{day}:act:{activity_id}"
+function getTopActivity(
+  activityVotes: ActivityVote[],
+  activities: Activity[],
+  day: number,
+  category: 'morning' | 'afternoon' | 'evening',
+): Activity | null {
+  const prefix = `d${day}:act:`
+  const counts: Record<string, number> = {}
 
-  const dayLines = days.map(({ day, date, venues }) => {
-    const meals = CATEGORIES.map((cat) => {
-      const v = venues[cat]
-      return v ? `${cap(cat)} at ${v.name} (${v.address})` : `${cap(cat)}: No votes yet`
-    }).join(', ')
-    return `Day ${day} (${date}): ${meals}`
+  for (const vote of activityVotes) {
+    if (!vote.activity_id.startsWith(prefix)) continue
+    const base = vote.activity_id.slice(prefix.length)
+    counts[base] = (counts[base] ?? 0) + 1
+  }
+
+  const catActivities = activities.filter((a) => a.category === category)
+  const withVotes = catActivities.filter((a) => (counts[a.id] ?? 0) >= 1)
+  if (withVotes.length === 0) return null
+
+  withVotes.sort((a, b) => {
+    const voteDiff = (counts[b.id] ?? 0) - (counts[a.id] ?? 0)
+    return voteDiff !== 0 ? voteDiff : a.name.localeCompare(b.name)
   })
 
-  const schema = `{ "days": [ { "day": 1, "date": "YYYY-MM-DD", "meals": [ { "meal": "breakfast", "venue": "...", "address": "...", "suggestedTime": "8:00 AM", "duration": "1 hour", "travelNote": "..." } ] } ] }`
-
-  return [header, '', ...dayLines, '', `Respond ONLY with valid JSON matching this schema:\n${schema}`].join('\n')
+  return withVotes[0]
 }
 
-function cap(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
+// Standard durations and base start times per slot label
+const SLOT_CONFIG: Record<string, { baseTime: string; duration: string }> = {
+  Breakfast:            { baseTime: '8:00 AM',  duration: '1 hour' },
+  'Morning Activity':   { baseTime: '9:30 AM',  duration: '1.5 hours' },
+  Lunch:                { baseTime: '12:00 PM', duration: '1.5 hours' },
+  'Afternoon Activity': { baseTime: '2:30 PM',  duration: '2 hours' },
+  Dinner:               { baseTime: '7:00 PM',  duration: '2 hours' },
+  'Evening Activity':   { baseTime: '9:30 PM',  duration: '1.5 hours' },
 }
 
-function isValidItinerary(obj: unknown): obj is GeneratedItinerary {
-  return (
-    !!obj &&
-    typeof obj === 'object' &&
-    Array.isArray((obj as Record<string, unknown>).days)
-  )
+function formatDistance(km: number): string {
+  if (km < 0.05) return 'â€”'
+  return `${km.toFixed(1)} km`
 }
 
-// POST /api/itinerary/generate [AC-AITINPDF-F2, F3, E3, S2, ERR1]
-// Intentionally public to all logged-in users — no admin gate [OWASP:A1 permissive by design]
+function formatTravelNote(km: number, minutes: number): string {
+  if (km < 0.05) return 'â€”'
+  if (km < 0.3) return `~${minutes} min walk`
+  return `~${minutes} min drive`
+}
+
+// [AC-ACTIVITIES-F17] Convert ScheduleSlot[] â†’ ItineraryItem[] with formatted strings
+function slotsToItems(slots: ReturnType<typeof buildDaySchedule>): ItineraryItem[] {
+  return slots.map((slot) => {
+    const cfg = SLOT_CONFIG[slot.label] ?? { baseTime: 'â€”', duration: 'â€”' }
+    return {
+      type: slot.type,
+      label: slot.label,
+      name: slot.name,
+      address: slot.address,
+      startTime: cfg.baseTime,
+      duration: cfg.duration,
+      distanceFromPrev: formatDistance(slot.distanceKmFromPrev),
+      travelNote: formatTravelNote(slot.distanceKmFromPrev, slot.travelMinutes),
+    }
+  })
+}
+
+// POST /api/itinerary/generate [AC-ACTIVITIES-F16, F17, AC-AITINPDF-E3]
+// Intentionally public to all logged-in users â€” no admin gate [OWASP:A1 permissive by design]
 export async function POST(_req: Request) {
   const supabase = createServerClient()
 
@@ -98,77 +117,54 @@ export async function POST(_req: Request) {
     return NextResponse.json({ error: 'Trip config not set' }, { status: 400 })
   }
 
-  // 2. Read votes
-  const { data: votes, error: vError } = await supabase.from('votes').select('*')
+  // 2. Read restaurant votes
+  const { data: votesRaw, error: vError } = await supabase.from('votes').select('*')
   if (vError) {
     return NextResponse.json({ error: 'Failed to read votes' }, { status: 500 })
   }
 
-  // 3. Read restaurants
-  const { data: restaurants, error: rError } = await supabase.from('restaurants').select('*')
-  if (rError) {
-    return NextResponse.json({ error: 'Failed to read restaurants' }, { status: 500 })
-  }
+  // 3. Read restaurants (DB-first, static fallback) [AC-AITINPDF-F5]
+  const { data: restaurantsRaw, error: rError } = await supabase.from('restaurants').select('*')
+  const restaurants: Venue[] = (rError || !restaurantsRaw?.length)
+    ? RESTAURANTS
+    : (restaurantsRaw as Venue[])
 
-  // 4. Compute top venues per day × category
+  // 4. Read activity votes [AC-ACTIVITIES-F16]
+  const { data: activityVotesRaw } = await supabase.from('activity_votes').select('*')
+
+  // 5. Read activities (DB-first, static fallback)
+  const { data: activitiesRaw } = await supabase.from('activities').select('*')
+  const activities: Activity[] = (!activitiesRaw?.length)
+    ? ACTIVITIES
+    : (activitiesRaw as Activity[])
+
+  const votes: Vote[] = (votesRaw as Vote[]) ?? []
+  const activityVotes: ActivityVote[] = (activityVotesRaw as ActivityVote[]) ?? []
+
+  // 6. Compute proximity-ordered schedule for each day [AC-ACTIVITIES-F14, F15, F17]
   const startDate = new Date(tripConfig.start_date)
-  const days = [1, 2, 3].map((day) => {
+  const days = [1, 2, 3].map((dayNum) => {
     const date = new Date(startDate)
-    date.setDate(startDate.getDate() + day - 1)
-    const venues: Record<string, Venue | null> = {}
-    for (const cat of CATEGORIES) {
-      venues[cat] = getTopVenue(votes as Vote[] ?? [], restaurants as Venue[] ?? [], day, cat)
+    date.setDate(startDate.getDate() + dayNum - 1)
+
+    const topRestaurants = {
+      breakfast: getTopVenue(votes, restaurants, dayNum, 'breakfast'),
+      lunch: getTopVenue(votes, restaurants, dayNum, 'lunch'),
+      dinner: getTopVenue(votes, restaurants, dayNum, 'dinner'),
     }
-    return { day, date: date.toISOString().slice(0, 10), venues }
+
+    const topActivities = {
+      morning: getTopActivity(activityVotes, activities, dayNum, 'morning'),
+      afternoon: getTopActivity(activityVotes, activities, dayNum, 'afternoon'),
+      evening: getTopActivity(activityVotes, activities, dayNum, 'evening'),
+    }
+
+    const slots = buildDaySchedule(tripConfig as TripConfig, topRestaurants, topActivities, dayNum)
+    const items = slotsToItems(slots)
+
+    return { day: dayNum, date: date.toISOString().slice(0, 10), items }
   })
 
-  // 5. Call OpenAI [AC-AITINPDF-S1, ERR1]
-  let openai: OpenAI
-  try {
-    openai = makeOpenAI()
-  } catch {
-    return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
-  }
-
-  let aiContent: string
-  try {
-    const completion = await openai.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      response_format: { type: 'json_object' },
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a travel itinerary assistant. Given a list of restaurants (one per meal per day) and a trip start date, produce a realistic daily schedule with suggested meal times, estimated duration, and brief travel notes. Respond ONLY with valid JSON matching the schema provided.',
-        },
-        {
-          role: 'user',
-          content: buildUserContent(tripConfig as TripConfig, days),
-        },
-      ],
-    })
-    aiContent = completion.choices[0].message.content ?? ''
-  } catch {
-    return NextResponse.json({ error: 'AI generation failed — try again' }, { status: 502 })
-  }
-
-  // 6. Parse and validate [AC-AITINPDF-S2] — never pass raw AI text to client
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(aiContent)
-  } catch {
-    return NextResponse.json(
-      { error: 'AI returned invalid JSON — please try again' },
-      { status: 502 },
-    )
-  }
-
-  if (!isValidItinerary(parsed)) {
-    return NextResponse.json(
-      { error: 'AI response schema mismatch — please try again' },
-      { status: 502 },
-    )
-  }
-
-  return NextResponse.json(parsed)
+  return NextResponse.json({ days })
 }
+

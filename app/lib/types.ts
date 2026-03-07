@@ -2,6 +2,48 @@
 
 export type Category = 'breakfast' | 'lunch' | 'dinner'
 
+// ── Activities ───────────────────────────────────────────────────────────────
+export type ActivityCategory = 'morning' | 'afternoon' | 'evening'
+
+export type ActivityVibe =
+  | 'beach'
+  | 'adventure'
+  | 'sightseeing'
+  | 'leisure'
+  | 'nightlife'
+  | 'nature'
+
+export interface Activity {
+  id: string
+  name: string
+  category: ActivityCategory
+  vibe: ActivityVibe[]
+  address: string
+  lat: number
+  lng: number
+  description?: string
+  hours?: string
+}
+
+export interface ActivityVote {
+  id: string
+  activity_id: string   // namespaced: "d1:act:surf-01"
+  voter_name: string
+  created_at: string
+}
+
+export interface ActivityPollEntry {
+  activity: Activity
+  votes: ActivityVote[]
+  voteCount: number
+}
+
+export interface ActivityPollData {
+  morning: ActivityPollEntry[]
+  afternoon: ActivityPollEntry[]
+  evening: ActivityPollEntry[]
+}
+
 export type Day = 1 | 2 | 3
 
 export type Vibe =
@@ -50,7 +92,7 @@ export interface VotePayload {
   voter_name: string
 }
 
-// [AC-TRIPCONFIG-F2, F3, F4, F5]
+// [AC-TRIPCONFIG-F2, F3, F4, F5] [AC-ACTIVITIES-F13]
 export interface TripConfig {
   id: string           // always 'main'
   trip_name: string
@@ -59,24 +101,41 @@ export interface TripConfig {
   stay_name: string
   stay_lat: number
   stay_lng: number
+  departure_time?: string  // e.g. "6:00 AM" — time group leaves Manila
+  arrival_time?: string    // e.g. "12:00 PM" — time group arrives in La Union
   updated_by: string
   updated_at: string
 }
 
-// [AC-AITINPDF-F3, F5, F6]
-export interface ItineraryMeal {
-  meal: 'breakfast' | 'lunch' | 'dinner'
-  venue: string       // venue name or "No votes yet"
+// [AC-ACTIVITIES-F15] Output of scheduleBuilder.buildDaySchedule()
+export interface ScheduleSlot {
+  type: 'meal' | 'activity'
+  label: string            // e.g. "Breakfast", "Morning Activity"
+  name: string             // venue or activity name (or "No votes yet")
   address: string
-  suggestedTime: string
-  duration: string
-  travelNote: string
+  lat: number
+  lng: number
+  distanceKmFromPrev: number
+  travelMinutes: number
 }
 
+// [AC-ACTIVITIES-F17, F18] Unified itinerary item — meal OR activity
+export interface ItineraryItem {
+  type: 'meal' | 'activity'
+  label: string            // e.g. "Breakfast", "Morning Activity"
+  name: string             // venue/activity name or "No votes yet"
+  address: string
+  startTime: string        // e.g. "8:00 AM"
+  duration: string         // e.g. "1 hour"
+  distanceFromPrev: string // e.g. "0.5 km"
+  travelNote: string       // e.g. "~2 min walk from hotel"
+}
+
+// [AC-AITINPDF-F3, F5, F6] — updated to use unified items
 export interface ItineraryDay {
   day: number
   date: string        // "YYYY-MM-DD"
-  meals: ItineraryMeal[]
+  items: ItineraryItem[]
 }
 
 export interface GeneratedItinerary {

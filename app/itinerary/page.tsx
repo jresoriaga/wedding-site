@@ -1,14 +1,15 @@
 'use client'
-// [AC-ITINPLAN0306-F3, F4, F5, E2, ERR4]
+// [AC-ITINPLAN0306-F3, F4, F5, E2, ERR4] [AC-ACTIVITIES-F8, F11]
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/app/lib/store'
 import { filterVenues } from '@/app/lib/filterVenues'
-import type { Category, Vibe, Venue } from '@/app/lib/types'
+import type { Category, Vibe, Venue, ActivityCategory } from '@/app/lib/types'
 import CategoryTabs from '@/app/components/CategoryTabs'
 import DayTabs from '@/app/components/DayTabs'
 import VibeFilter from '@/app/components/VibeFilter'
 import RestaurantCard from '@/app/components/RestaurantCard'
+import ActivityCard from '@/app/components/ActivityCard'
 import PollSidebar from '@/app/components/PollSidebar'
 import MapView from '@/app/components/MapView'
 import RenameModal from '@/app/components/RenameModal'
@@ -21,6 +22,8 @@ import { useItineraryDownload } from '@/app/hooks/useItineraryDownload'
 import { ErrorBoundary } from '@/app/components/ErrorBoundary'
 import { usePollStream } from '@/app/hooks/usePollStream'
 import { useVotes } from '@/app/hooks/useVotes'
+import { useActivityVotes } from '@/app/hooks/useActivityVotes'
+import { useActivityPollStream } from '@/app/hooks/useActivityPollStream'
 
 function ItineraryContent() {
   const router = useRouter()
@@ -34,6 +37,8 @@ function ItineraryContent() {
 
   const [activeCategory, setActiveCategory] = useState<Category>('breakfast')
   const [selectedVibes, setSelectedVibes] = useState<Set<Vibe>>(new Set())
+  const [mainTab, setMainTab] = useState<'restaurants' | 'activities'>('restaurants')
+  const [activeActivityTab, setActiveActivityTab] = useState<ActivityCategory>('morning')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [showRename, setShowRename] = useState(false)
   const [showMap, setShowMap] = useState(false)
@@ -58,6 +63,7 @@ function ItineraryContent() {
   }, [userName, router])
 
   usePollStream()
+  useActivityPollStream()
 
   function showToast(msg: string) {
     setToastMessage(msg)
@@ -65,13 +71,25 @@ function ItineraryContent() {
   }
 
   const { isSelected, toggleVote, clearDayVotes, selectedVenueIds } = useVotes({ onError: showToast, day: activeDay })
+  const { isSelected: isActivitySelected, toggleVote: toggleActivityVote, clearDayVotes: clearDayActivityVotes } = useActivityVotes({ onError: showToast, day: activeDay })
+  const selectedActivityIds = useAppStore((s) => s.selectedActivityIds)
+
+  // Activity store state [AC-ACTIVITIES-F11]
+  const activityAllVotes = useAppStore((s) => s.activityAllVotes)
+  const activityVenues = useAppStore((s) => s.activityVenues)
 
   const dayPrefix = `d${activeDay}:`
+  const activityDayPrefix = `d${activeDay}:act:`
 
   // Count of the current user's own votes for the active day
   const myDayVoteCount = useMemo(
     () => [...selectedVenueIds].filter((id) => id.startsWith(dayPrefix)).length,
     [selectedVenueIds, dayPrefix]
+  )
+
+  const myDayActivityVoteCount = useMemo(
+    () => [...selectedActivityIds].filter((id) => id.startsWith(activityDayPrefix)).length,
+    [selectedActivityIds, activityDayPrefix]
   )
 
   const voteCountByVenue = useMemo(() => {
@@ -83,6 +101,22 @@ function ItineraryContent() {
     }
     return map
   }, [allVotes, dayPrefix])
+
+  const activityVoteCountById = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const vote of activityAllVotes) {
+      if (!vote.activity_id.startsWith(activityDayPrefix)) continue
+      const base = vote.activity_id.slice(activityDayPrefix.length)
+      map[base] = (map[base] ?? 0) + 1
+    }
+    return map
+  }, [activityAllVotes, activityDayPrefix])
+
+  // Filtered activities for current day+time tab [AC-ACTIVITIES-F11]
+  const filteredActivities = useMemo(
+    () => activityVenues.filter((a) => a.category === activeActivityTab),
+    [activityVenues, activeActivityTab]
+  )
 
   // Votes for this day — MapView strips the prefix internally
   const dayVotes = useMemo(
@@ -182,6 +216,30 @@ function ItineraryContent() {
             </div>
           )}
 
+          {/* ── Restaurants | Activities tab switcher [AC-ACTIVITIES-F11] ── */}
+          <div className="flex gap-2 p-1 bg-gray-100 rounded-xl mb-5" role="tablist" aria-label="Vote category">
+            <button
+              role="tab"
+              aria-selected={mainTab === 'restaurants'}
+              onClick={() => setMainTab('restaurants')}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${
+                mainTab === 'restaurants' ? 'bg-white text-ocean shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              🍽️ Restaurants
+            </button>
+            <button
+              role="tab"
+              aria-selected={mainTab === 'activities'}
+              onClick={() => setMainTab('activities')}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${
+                mainTab === 'activities' ? 'bg-white text-ocean shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              🎯 Activities
+            </button>
+          </div>
+
           {/* ── Day strip (left) + Content (right) ────────────────────── */}
           <div className="flex gap-4 items-start">
             {/* Vertical day tabs + clear CTA — sticky so always visible while scrolling */}
@@ -192,11 +250,11 @@ function ItineraryContent() {
               <DayTabs active={activeDay} onChange={setActiveDay} orientation="vertical" />
 
               {/* Clear all my votes for this day */}
-              {myDayVoteCount > 0 && (
+              {mainTab === 'restaurants' && myDayVoteCount > 0 && (
                 <button
                   type="button"
                   onClick={() => clearDayVotes()}
-                  aria-label={`Clear all your Day ${activeDay} votes`}
+                  aria-label={`Clear all your Day ${activeDay} restaurant votes`}
                   title={`Clear ${myDayVoteCount} vote${myDayVoteCount !== 1 ? 's' : ''} for Day ${activeDay}`}
                   className="w-14 flex flex-col items-center gap-0.5 py-2 rounded-xl bg-coral/10 hover:bg-coral/20 text-coral border border-coral/30 transition-colors focus:outline-none focus:ring-2 focus:ring-coral text-center"
                 >
@@ -205,12 +263,29 @@ function ItineraryContent() {
                   <span className="text-[8px] leading-none opacity-80">clear</span>
                 </button>
               )}
+              {mainTab === 'activities' && myDayActivityVoteCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => clearDayActivityVotes()}
+                  aria-label={`Clear all your Day ${activeDay} activity votes`}
+                  title={`Clear ${myDayActivityVoteCount} activity vote${myDayActivityVoteCount !== 1 ? 's' : ''} for Day ${activeDay}`}
+                  className="w-14 flex flex-col items-center gap-0.5 py-2 rounded-xl bg-coral/10 hover:bg-coral/20 text-coral border border-coral/30 transition-colors focus:outline-none focus:ring-2 focus:ring-coral text-center"
+                >
+                  <span className="text-sm" aria-hidden="true">🗑️</span>
+                  <span className="text-[9px] font-bold leading-none">{myDayActivityVoteCount}v</span>
+                  <span className="text-[8px] leading-none opacity-80">clear</span>
+                </button>
+              )}
             </div>
 
             {/* Right: filters + map + cards */}
             <div className="flex-1 min-w-0">
-              {/* ── Sticky controls bar: category + vibes + map button ── */}
-              <div className="sticky top-0 sm:top-14 z-20 bg-[#FBE9D0]/95 backdrop-blur-sm -mx-1 px-1 pt-1 pb-3 space-y-3">
+
+              {/* ── RESTAURANTS tab content ── */}
+              {mainTab === 'restaurants' && (
+                <>
+                  {/* ── Sticky controls bar: category + vibes + map button ── */}
+                  <div className="sticky top-0 sm:top-14 z-20 bg-[#FBE9D0]/95 backdrop-blur-sm -mx-1 px-1 pt-1 pb-3 space-y-3">
                 {/* Category tabs */}
                 <CategoryTabs active={activeCategory} onChange={handleTabChange} />
 
@@ -284,6 +359,50 @@ function ItineraryContent() {
                 )}
               </div>
               </div>{/* end scrollable content */}
+                </>
+              )}{/* end restaurants tab */}
+
+              {/* ── ACTIVITIES tab content [AC-ACTIVITIES-F8, F11] ── */}
+              {mainTab === 'activities' && (
+                <>
+                  {/* Time-of-day tabs */}
+                  <div className="flex gap-2 mb-4" role="tablist" aria-label="Activity time of day">
+                    {(['morning', 'afternoon', 'evening'] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        role="tab"
+                        aria-selected={activeActivityTab === tab}
+                        onClick={() => setActiveActivityTab(tab)}
+                        className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold transition-all capitalize focus:outline-none focus:ring-2 focus:ring-ocean ${
+                          activeActivityTab === tab
+                            ? 'bg-ocean text-white shadow-sm'
+                            : 'bg-white text-gray-500 border border-gray-200 hover:border-ocean/40'
+                        }`}
+                      >
+                        {tab === 'morning' ? '🌅' : tab === 'afternoon' ? '☀️' : '🌙'} {tab}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Activity cards */}
+                  <div
+                    role="tabpanel"
+                    aria-label={`Day ${activeDay} ${activeActivityTab} activities`}
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in"
+                  >
+                    {filteredActivities.map((activity) => (
+                      <ActivityCard
+                        key={activity.id}
+                        activity={activity}
+                        selected={isActivitySelected(activity.id)}
+                        voteCount={activityVoteCountById[activity.id] ?? 0}
+                        onToggle={toggleActivityVote}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}{/* end activities tab */}
+
             </div>
           </div>
         </div>

@@ -33,21 +33,25 @@ const MOCK_ITINERARY: GeneratedItinerary = {
     {
       day: 1,
       date: '2026-04-10',
-      meals: [
+      items: [
         {
-          meal: 'breakfast',
-          venue: 'El Union Coffee',
+          type: 'meal',
+          label: 'Breakfast',
+          name: 'El Union Coffee',
           address: 'San Juan, La Union',
-          suggestedTime: '8:00 AM',
+          startTime: '8:00 AM',
           duration: '1 hour',
+          distanceFromPrev: '—',
           travelNote: '5 min walk from hostel',
         },
         {
-          meal: 'lunch',
-          venue: 'No votes yet',
+          type: 'meal',
+          label: 'Lunch',
+          name: 'No votes yet',
           address: '',
-          suggestedTime: '—',
+          startTime: '—',
           duration: '—',
+          distanceFromPrev: '—',
           travelNote: '—',
         },
       ],
