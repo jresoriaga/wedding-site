@@ -62,3 +62,23 @@ export interface TripConfig {
   updated_by: string
   updated_at: string
 }
+
+// [AC-AITINPDF-F3, F5, F6]
+export interface ItineraryMeal {
+  meal: 'breakfast' | 'lunch' | 'dinner'
+  venue: string       // venue name or "No votes yet"
+  address: string
+  suggestedTime: string
+  duration: string
+  travelNote: string
+}
+
+export interface ItineraryDay {
+  day: number
+  date: string        // "YYYY-MM-DD"
+  meals: ItineraryMeal[]
+}
+
+export interface GeneratedItinerary {
+  days: ItineraryDay[]
+}

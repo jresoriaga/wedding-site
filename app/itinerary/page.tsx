@@ -17,6 +17,7 @@ import AdminRestaurantModal from '@/app/components/AdminRestaurantModal'
 import TripConfigModal from '@/app/components/TripConfigModal'
 import { useRestaurants } from '@/app/hooks/useRestaurants'
 import { useTripConfig } from '@/app/hooks/useTripConfig'
+import { useItineraryDownload } from '@/app/hooks/useItineraryDownload'
 import { ErrorBoundary } from '@/app/components/ErrorBoundary'
 import { usePollStream } from '@/app/hooks/usePollStream'
 import { useVotes } from '@/app/hooks/useVotes'
@@ -43,6 +44,8 @@ function ItineraryContent() {
   const setTripConfig = useAppStore((s) => s.setTripConfig)
 
   useTripConfig()
+
+  const { download: downloadItinerary, loading: pdfLoading, error: pdfError, setError: setPdfError } = useItineraryDownload()
 
   // [AC-ITINPLAN0306-F11] Dynamic restaurants from DB with static fallback
   const { venues, venueMap, refetch: refetchRestaurants } = useRestaurants()
@@ -136,15 +139,48 @@ function ItineraryContent() {
                 Pick where you want to eat — La Union outing!
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowRename(true)}
-              aria-label="Change your name"
-              className="flex-shrink-0 mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 text-xs font-medium hover:border-ocean hover:text-ocean transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
-            >
-              ✏️ Rename
-            </button>
+            {/* [AC-AITINPDF-F1] Header actions row */}
+            <div className="flex-shrink-0 mt-1 flex gap-2">
+              {/* [AC-AITINPDF-F1, F2] Download button — visible to all logged-in users */}
+              <button
+                type="button"
+                onClick={() => { setPdfError(null); downloadItinerary() }}
+                disabled={pdfLoading}
+                aria-label="Download PDF itinerary"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-ocean/30 bg-ocean/5 text-ocean text-xs font-semibold hover:bg-ocean/15 disabled:opacity-60 disabled:cursor-wait transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
+              >
+                {pdfLoading ? (
+                  <>
+                    <span className="inline-block w-3 h-3 rounded-full border-2 border-ocean border-t-transparent animate-spin" aria-hidden="true" />
+                    Generating…
+                  </>
+                ) : '📄 Download Itinerary'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowRename(true)}
+                aria-label="Change your name"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 text-xs font-medium hover:border-ocean hover:text-ocean transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
+              >
+                ✏️ Rename
+              </button>
+            </div>
           </div>
+          {/* [AC-AITINPDF-E1, ERR1] PDF error banner */}
+          {pdfError && (
+            <div
+              role="alert"
+              className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-coral/10 border border-coral/30 text-coral text-xs font-medium animate-fade-in"
+            >
+              <span>⚠️ {pdfError}</span>
+              <button
+                type="button"
+                onClick={() => setPdfError(null)}
+                aria-label="Dismiss error"
+                className="ml-2 text-coral/70 hover:text-coral text-sm"
+              >✕</button>
+            </div>
+          )}
 
           {/* ── Day strip (left) + Content (right) ────────────────────── */}
           <div className="flex gap-4 items-start">
