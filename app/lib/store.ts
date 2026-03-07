@@ -1,6 +1,7 @@
 'use client'
 import { create } from 'zustand'
-import type { Day, PollData, Vote } from './types'
+import type { Day, PollData, Vote, Venue } from './types'
+import { RESTAURANTS } from './restaurants'
 
 interface AppState {
   // User identity
@@ -20,6 +21,10 @@ interface AppState {
   // All votes (for map)
   allVotes: Vote[]
   setAllVotes: (votes: Vote[]) => void
+
+  // Live venue list (DB-first, falls back to static) — used by rankVenues
+  venues: Venue[]
+  setVenues: (venues: Venue[]) => void
 
   // SSE connection state
   isReconnecting: boolean
@@ -53,6 +58,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   allVotes: [],
   setAllVotes: (votes) => set({ allVotes: votes }),
+
+  venues: RESTAURANTS,
+  setVenues: (venues) => set({ venues }),
 
   isReconnecting: false,
   setIsReconnecting: (v) => set({ isReconnecting: v }),

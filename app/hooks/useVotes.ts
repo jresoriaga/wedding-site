@@ -62,11 +62,12 @@ export function useVotes({ onError, day = 1 }: UseVotesOptions = {}) {
           },
         ]
       }
+      const liveVenues = useAppStore.getState().venues
       setAllVotes(optimisticVotes)
       setPollData({
-        breakfast: rankVenues(optimisticVotes, 'breakfast', currentDay),
-        lunch: rankVenues(optimisticVotes, 'lunch', currentDay),
-        dinner: rankVenues(optimisticVotes, 'dinner', currentDay),
+        breakfast: rankVenues(optimisticVotes, 'breakfast', currentDay, liveVenues),
+        lunch: rankVenues(optimisticVotes, 'lunch', currentDay, liveVenues),
+        dinner: rankVenues(optimisticVotes, 'dinner', currentDay, liveVenues),
       })
 
       try {
@@ -79,12 +80,13 @@ export function useVotes({ onError, day = 1 }: UseVotesOptions = {}) {
 
         if (!res.ok && res.status !== 409) {
           // Revert all three optimistic updates [AC-ITINPLAN0306-ERR1]
+          const revertVenues = useAppStore.getState().venues
           toggleVenueSelection(namespacedId)
           setAllVotes(prevAllVotes)
           setPollData({
-            breakfast: rankVenues(prevAllVotes, 'breakfast', currentDay),
-            lunch: rankVenues(prevAllVotes, 'lunch', currentDay),
-            dinner: rankVenues(prevAllVotes, 'dinner', currentDay),
+            breakfast: rankVenues(prevAllVotes, 'breakfast', currentDay, revertVenues),
+            lunch: rankVenues(prevAllVotes, 'lunch', currentDay, revertVenues),
+            dinner: rankVenues(prevAllVotes, 'dinner', currentDay, revertVenues),
           })
           const msg = 'Couldn\'t save your vote — try again'
           onError?.(msg)
@@ -92,12 +94,13 @@ export function useVotes({ onError, day = 1 }: UseVotesOptions = {}) {
         }
       } catch (err) {
         // Network error — revert all three [AC-ITINPLAN0306-ERR1]
+        const revertVenues = useAppStore.getState().venues
         toggleVenueSelection(namespacedId)
         setAllVotes(prevAllVotes)
         setPollData({
-          breakfast: rankVenues(prevAllVotes, 'breakfast', currentDay),
-          lunch: rankVenues(prevAllVotes, 'lunch', currentDay),
-          dinner: rankVenues(prevAllVotes, 'dinner', currentDay),
+          breakfast: rankVenues(prevAllVotes, 'breakfast', currentDay, revertVenues),
+          lunch: rankVenues(prevAllVotes, 'lunch', currentDay, revertVenues),
+          dinner: rankVenues(prevAllVotes, 'dinner', currentDay, revertVenues),
         })
         onError?.('Couldn\'t save your vote — try again')
         console.error('[useVotes] Network error', err)

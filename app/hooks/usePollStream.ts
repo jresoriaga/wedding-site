@@ -15,11 +15,13 @@ export function usePollStream() {
   const activeDay = useAppStore((s) => s.activeDay)
   const allVotes = useAppStore((s) => s.allVotes)
 
+  const venues = useAppStore((s) => s.venues)
+
   const buildPollData = useCallback((votes: Vote[], day: Day): PollData => ({
-    breakfast: rankVenues(votes, 'breakfast', day),
-    lunch: rankVenues(votes, 'lunch', day),
-    dinner: rankVenues(votes, 'dinner', day),
-  }), [])
+    breakfast: rankVenues(votes, 'breakfast', day, venues),
+    lunch: rankVenues(votes, 'lunch', day, venues),
+    dinner: rankVenues(votes, 'dinner', day, venues),
+  }), [venues])
 
   // Re-derive poll data whenever the active day changes [Day 1/2/3 support]
   useEffect(() => {

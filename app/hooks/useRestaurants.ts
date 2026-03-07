@@ -2,12 +2,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { Venue } from '@/app/lib/types'
 import { RESTAURANTS } from '@/app/lib/restaurants'
+import { useAppStore } from '@/app/lib/store'
 
 // [AC-ITINPLAN0306-F11] — DB-first venue list with static fallback
 export function useRestaurants() {
   const [venues, setVenues] = useState<Venue[]>(RESTAURANTS)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const setStoreVenues = useAppStore((s) => s.setVenues)
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -16,14 +18,17 @@ export function useRestaurants() {
       const res = await fetch('/api/restaurants')
       if (!res.ok) throw new Error('Failed to load restaurants')
       const data: Venue[] = await res.json()
-      setVenues(data.length > 0 ? data : RESTAURANTS)
+      const resolved = data.length > 0 ? data : RESTAURANTS
+      setVenues(resolved)
+      setStoreVenues(resolved) // sync into store so rankVenues sees all DB venues
     } catch (e) {
       setError('Using cached restaurant list')
       setVenues(RESTAURANTS)
+      setStoreVenues(RESTAURANTS)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [setStoreVenues])
 
   useEffect(() => {
     load()
