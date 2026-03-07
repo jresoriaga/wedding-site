@@ -1,7 +1,6 @@
 'use client'
 import { useState, useRef } from 'react'
 import { validateName, sanitizeName } from '@/app/lib/validateName'
-import AdBanner from './AdBanner'
 
 interface NameGateProps {
   onSuccess: (name: string) => void
@@ -115,13 +114,6 @@ export default function NameGate({ onSuccess }: NameGateProps) {
         <p className="text-center text-sky-100/70 text-xs mt-6">
           No account needed — just your name 🙌
         </p>
-
-        {/* Ad slot — replace IDs with real values from your AdSense dashboard */}
-        <AdBanner
-          adClient="ca-pub-9216805517889728"
-          adSlot="XXXXXXXXXX"
-          className="mt-6 rounded-2xl"
-        />
       </div>
     </div>
   )
