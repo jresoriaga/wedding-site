@@ -7,6 +7,7 @@ import MapView from '@/app/components/MapView'
 import DayTabs from '@/app/components/DayTabs'
 import CategoryTabs from '@/app/components/CategoryTabs'
 import { usePollStream } from '@/app/hooks/usePollStream'
+import { useTripConfig } from '@/app/hooks/useTripConfig'
 import type { Category } from '@/app/lib/types'
 
 export default function MapPage() {
@@ -19,6 +20,7 @@ export default function MapPage() {
   const [activeCategory, setActiveCategory] = useState<Category>('breakfast')
 
   usePollStream()
+  useTripConfig()
 
   useEffect(() => {
     const saved = localStorage.getItem('lu-outing-name')

@@ -1,6 +1,6 @@
 'use client'
 import { create } from 'zustand'
-import type { Day, PollData, Vote, Venue } from './types'
+import type { Day, PollData, Vote, Venue, TripConfig } from './types'
 import { RESTAURANTS } from './restaurants'
 
 interface AppState {
@@ -33,6 +33,10 @@ interface AppState {
   // Active day (1 | 2 | 3)
   activeDay: Day
   setActiveDay: (day: Day) => void
+
+  // Trip configuration (dates + stay location) set by Joef [AC-TRIPCONFIG-F4]
+  tripConfig: TripConfig | null
+  setTripConfig: (config: TripConfig | null) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -67,4 +71,7 @@ export const useAppStore = create<AppState>((set) => ({
 
   activeDay: 1,
   setActiveDay: (day) => set({ activeDay: day }),
+
+  tripConfig: null,
+  setTripConfig: (config) => set({ tripConfig: config }),
 }))

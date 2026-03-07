@@ -14,7 +14,9 @@ import MapView from '@/app/components/MapView'
 import RenameModal from '@/app/components/RenameModal'
 import VenueDetailModal from '@/app/components/VenueDetailModal'
 import AdminRestaurantModal from '@/app/components/AdminRestaurantModal'
+import TripConfigModal from '@/app/components/TripConfigModal'
 import { useRestaurants } from '@/app/hooks/useRestaurants'
+import { useTripConfig } from '@/app/hooks/useTripConfig'
 import { ErrorBoundary } from '@/app/components/ErrorBoundary'
 import { usePollStream } from '@/app/hooks/usePollStream'
 import { useVotes } from '@/app/hooks/useVotes'
@@ -36,6 +38,11 @@ function ItineraryContent() {
   const [showMap, setShowMap] = useState(false)
   const [venueForDetail, setVenueForDetail] = useState<Venue | null>(null)
   const [showAdminModal, setShowAdminModal] = useState(false)
+  const [showTripConfigModal, setShowTripConfigModal] = useState(false)
+  const tripConfig = useAppStore((s) => s.tripConfig)
+  const setTripConfig = useAppStore((s) => s.setTripConfig)
+
+  useTripConfig()
 
   // [AC-ITINPLAN0306-F11] Dynamic restaurants from DB with static fallback
   const { venues, venueMap, refetch: refetchRestaurants } = useRestaurants()
@@ -281,6 +288,16 @@ function ItineraryContent() {
       {/* [AC-ITINPLAN0306-F14] Joef-only: Admin FAB + modal */}
       {userName === 'Joef' && (
         <>
+          {/* [AC-TRIPCONFIG-F1] Trip config FAB */}
+          <button
+            type="button"
+            onClick={() => setShowTripConfigModal(true)}
+            aria-label="Configure trip"
+            data-testid="trip-config-fab"
+            className="fixed bottom-6 right-[5.5rem] z-40 w-14 h-14 rounded-full bg-sand text-white shadow-xl flex items-center justify-center text-2xl hover:bg-sand/90 transition-all focus:outline-none focus:ring-4 focus:ring-sand/40 active:scale-95"
+          >
+            ⚙️
+          </button>
           <button
             type="button"
             onClick={() => setShowAdminModal(true)}
@@ -294,6 +311,13 @@ function ItineraryContent() {
             <AdminRestaurantModal
               onCreated={() => { setShowAdminModal(false); refetchRestaurants() }}
               onClose={() => setShowAdminModal(false)}
+            />
+          )}
+          {showTripConfigModal && (
+            <TripConfigModal
+              existing={tripConfig}
+              onSaved={(config) => { setTripConfig(config); setShowTripConfigModal(false) }}
+              onClose={() => setShowTripConfigModal(false)}
             />
           )}
         </>

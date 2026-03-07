@@ -49,3 +49,16 @@ export interface VotePayload {
   venue_id: string
   voter_name: string
 }
+
+// [AC-TRIPCONFIG-F2, F3, F4, F5]
+export interface TripConfig {
+  id: string           // always 'main'
+  trip_name: string
+  start_date: string   // ISO date e.g. "2026-04-10"
+  end_date: string
+  stay_name: string
+  stay_lat: number
+  stay_lng: number
+  updated_by: string
+  updated_at: string
+}
