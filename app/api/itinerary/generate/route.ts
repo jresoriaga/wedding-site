@@ -3,11 +3,16 @@ import OpenAI from 'openai'
 import { createServerClient } from '@/app/lib/supabase'
 import type { TripConfig, Venue, Vote, GeneratedItinerary } from '@/app/lib/types'
 
-// [AC-AITINPDF-S1] OpenAI client is server-only — never imported in 'use client' files
+// [AC-AITINPDF-S1] AI client is server-only — never imported in 'use client' files
 // [OWASP:A5] API key only accessed at request time, never at module level
+// Uses Groq (free tier) via OpenAI-compatible SDK — model: llama-3.3-70b-versatile
 function makeOpenAI(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not set')
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  const key = process.env.GROQ_API_KEY
+  if (!key) throw new Error('GROQ_API_KEY not set')
+  return new OpenAI({
+    apiKey: key,
+    baseURL: 'https://api.groq.com/openai/v1',
+  })
 }
 
 const CATEGORIES = ['breakfast', 'lunch', 'dinner'] as const
@@ -128,7 +133,7 @@ export async function POST(_req: Request) {
   let aiContent: string
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'llama-3.3-70b-versatile',
       response_format: { type: 'json_object' },
       messages: [
         {

@@ -127,7 +127,7 @@ function setupOpenAI(response: unknown) {
 describe('POST /api/itinerary/generate', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    process.env.OPENAI_API_KEY = 'test-key'
+    process.env.GROQ_API_KEY = 'test-key'
   })
 
   it('[AC-AITINPDF-E3] returns 400 when trip config is not set', async () => {
