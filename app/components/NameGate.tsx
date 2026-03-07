@@ -70,7 +70,7 @@ export default function NameGate({ onSuccess }: NameGateProps) {
                   setValue(e.target.value)
                   if (error) setError(null)
                 }}
-                placeholder="e.g. Maria, Juan 🌊"
+                placeholder="e.g. Drew, Emil"
                 maxLength={60}
                 autoFocus
                 aria-describedby={error ? 'name-error' : undefined}
