@@ -52,14 +52,32 @@ describe('GET /api/restaurants', () => {
 
   it('[AC-ITINPLAN0306-F11] returns venues from Supabase when table exists', async () => {
     const mockVenues = [RESTAURANTS[0]]
+
+    // GET now does two queries: restaurants + restaurant_images (for featured image join)
+    const restaurantImagesMock = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+      }),
+    }
+    const supabaseMock = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'restaurant_images') return restaurantImagesMock
+        return {
+          select: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: mockVenues, error: null }),
+          }),
+        }
+      }),
+    }
     vi.mocked(createServerClient).mockReturnValue(
-      makeOrderSelect({ data: mockVenues, error: null }) as unknown as ReturnType<typeof createServerClient>
+      supabaseMock as unknown as ReturnType<typeof createServerClient>
     )
 
     const res = await GET()
     const json = await res.json()
 
     expect(res.status).toBe(200)
+    // imageUrl:undefined is stripped by JSON so shape matches mockVenues
     expect(json).toEqual(mockVenues)
   })
 

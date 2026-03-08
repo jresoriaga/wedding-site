@@ -1,31 +1,21 @@
 'use client'
-import type { Vibe } from '@/app/lib/types'
 
 interface VibeFilterProps {
-  selected: Set<Vibe>
-  onChange: (vibes: Set<Vibe>) => void
+  vibes: string[]
+  selected: Set<string>
+  onChange: (vibes: Set<string>) => void
 }
 
-const ALL_VIBES: { label: string; value: Vibe; emoji: string }[] = [
-  { label: 'Party', value: 'party', emoji: '🎉' },
-  { label: 'Casual Dining', value: 'casual dining', emoji: '🍽️' },
-  { label: 'Buffet', value: 'buffet', emoji: '🥘' },
-  { label: 'Bar', value: 'bar', emoji: '🍺' },
-  { label: 'Café', value: 'café', emoji: '☕' },
-  { label: 'Street Food', value: 'street food', emoji: '🌮' },
-]
-
 // [AC-ITINPLAN0306-F4] [WCAG:1.3.1]
-export default function VibeFilter({ selected, onChange }: VibeFilterProps) {
-  function toggle(vibe: Vibe) {
+export default function VibeFilter({ vibes, selected, onChange }: VibeFilterProps) {
+  function toggle(vibe: string) {
     const next = new Set(selected)
-    if (next.has(vibe)) {
-      next.delete(vibe)
-    } else {
-      next.add(vibe)
-    }
+    if (next.has(vibe)) next.delete(vibe)
+    else next.add(vibe)
     onChange(next)
   }
+
+  if (vibes.length === 0) return null
 
   return (
     <div>
@@ -33,7 +23,7 @@ export default function VibeFilter({ selected, onChange }: VibeFilterProps) {
         Filter by Vibe
       </p>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Vibe filters">
-        {ALL_VIBES.map(({ label, value, emoji }) => {
+        {vibes.map((value) => {
           const isSelected = selected.has(value)
           return (
             <button
@@ -44,7 +34,7 @@ export default function VibeFilter({ selected, onChange }: VibeFilterProps) {
               data-testid={`vibe-chip-${value}`}
               onClick={() => toggle(value)}
               className={`
-                flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium
+                flex items-center px-3 py-1.5 rounded-full text-sm font-medium
                 transition-all duration-150 border-2 focus:outline-none focus:ring-2 focus:ring-ocean focus:ring-offset-1
                 ${isSelected
                   ? 'bg-coral text-white border-coral shadow-sm shadow-coral/30'
@@ -52,8 +42,7 @@ export default function VibeFilter({ selected, onChange }: VibeFilterProps) {
                 }
               `}
             >
-              <span aria-hidden="true">{emoji}</span>
-              {label}
+              {value}
             </button>
           )
         })}

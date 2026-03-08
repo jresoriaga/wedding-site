@@ -1,181 +1,437 @@
-'use client'
-// [AC-ITINPLAN0306-F3, F4, F5, E2, ERR4] [AC-ACTIVITIES-F8, F11]
-import { useState, useMemo, useCallback, useEffect } from 'react'
+﻿'use client'
+// [AC-GUIDE-F2, F5, F7, F8, F10, F11, F12, F13]
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/app/lib/store'
-import { filterVenues } from '@/app/lib/filterVenues'
-import type { Category, Vibe, Venue, ActivityCategory } from '@/app/lib/types'
+import { filterVenues, timeOfDayToCategory } from '@/app/lib/filterVenues'
+import type { TimeOfDay, Venue, Activity } from '@/app/lib/types'
 import CategoryTabs from '@/app/components/CategoryTabs'
-import DayTabs from '@/app/components/DayTabs'
 import VibeFilter from '@/app/components/VibeFilter'
 import RestaurantCard from '@/app/components/RestaurantCard'
 import ActivityCard from '@/app/components/ActivityCard'
-import PollSidebar from '@/app/components/PollSidebar'
 import MapView from '@/app/components/MapView'
 import RenameModal from '@/app/components/RenameModal'
 import VenueDetailModal from '@/app/components/VenueDetailModal'
 import AdminRestaurantModal from '@/app/components/AdminRestaurantModal'
+import AdminEditModal from '@/app/components/AdminEditModal'
 import TripConfigModal from '@/app/components/TripConfigModal'
 import { useRestaurants } from '@/app/hooks/useRestaurants'
 import { useTripConfig } from '@/app/hooks/useTripConfig'
 import { useItineraryDownload } from '@/app/hooks/useItineraryDownload'
+import { useActivityImages } from '@/app/hooks/useActivityImages'
 import { ErrorBoundary } from '@/app/components/ErrorBoundary'
-import { usePollStream } from '@/app/hooks/usePollStream'
-import { useVotes } from '@/app/hooks/useVotes'
-import { useActivityVotes } from '@/app/hooks/useActivityVotes'
-import { useActivityPollStream } from '@/app/hooks/useActivityPollStream'
+
+const ACTIVITY_VIBE_COLORS: Record<string, string> = {
+  beach: 'bg-sky-100 text-sky-700',
+  adventure: 'bg-orange-100 text-orange-700',
+  sightseeing: 'bg-purple-100 text-purple-700',
+  leisure: 'bg-green-100 text-green-700',
+  nightlife: 'bg-indigo-100 text-indigo-700',
+  nature: 'bg-emerald-100 text-emerald-700',
+}
+
+interface ActivityDetailSheetProps {
+  activity: Activity
+  isSelected: boolean
+  userName: string | null
+  onToggle: () => void
+  onClose: () => void
+  onEdit: () => void
+}
+
+function ActivityDetailSheet({ activity, isSelected, userName, onToggle, onClose, onEdit }: ActivityDetailSheetProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const updateActivity = useAppStore((s) => s.updateActivity)
+  const isJoef = userName === 'Joef'
+
+  const { images, isLoading: imagesLoading, refetch } = useActivityImages(activity.id)
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [settingFeatured, setSettingFeatured] = useState(false)
+  const [featuredUrl, setFeaturedUrl] = useState(activity.imageUrl ?? '')
+
+  useEffect(() => { setCurrentIndex(0) }, [activity.id])
+
+  const goPrev = useCallback(() => {
+    setCurrentIndex((i) => (i === 0 ? images.length - 1 : i - 1))
+  }, [images.length])
+
+  const goNext = useCallback(() => {
+    setCurrentIndex((i) => (i === images.length - 1 ? 0 : i + 1))
+  }, [images.length])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft') goPrev()
+      if (e.key === 'ArrowRight') goNext()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, goPrev, goNext])
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    setUploading(true)
+    setUploadError(null)
+    for (const file of files) {
+      const formData = new FormData()
+      formData.append('uploaded_by', 'Joef')
+      formData.append('file', file)
+      try {
+        const res = await fetch(`/api/activities/${activity.id}/images`, { method: 'POST', body: formData })
+        if (!res.ok) { const j = await res.json(); setUploadError(j.error ?? 'Upload failed') }
+      } catch { setUploadError('Upload failed — check your connection') }
+    }
+    setUploading(false)
+    e.target.value = ''
+    await refetch()
+    setCurrentIndex(Math.max(0, images.length - 1))
+  }
+
+  async function handleSetFeatured(imageUrl: string) {
+    if (imageUrl === featuredUrl || settingFeatured) return
+    setSettingFeatured(true)
+    try {
+      const res = await fetch(`/api/activities/${activity.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-created-by': 'Joef' },
+        body: JSON.stringify({ imageUrl }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setFeaturedUrl(imageUrl)
+        updateActivity(updated)
+      }
+    } catch { /* silent */ }
+    setSettingFeatured(false)
+  }
+
+  const currentImage = images[currentIndex] ?? null
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Details for ${activity.name}`}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-white w-full max-h-[85dvh] rounded-t-3xl shadow-2xl flex flex-col animate-slide-up overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">{activity.category}</span>
+              <h2 className="text-lg font-bold text-gray-800 truncate">{activity.name}</h2>
+            </div>
+            <p className="text-gray-500 text-xs truncate">{activity.address}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isJoef && (
+              <button
+                type="button"
+                onClick={onEdit}
+                aria-label="Edit activity"
+                className="px-3 py-1.5 rounded-xl border border-ocean/30 text-ocean text-xs font-semibold hover:bg-ocean/10 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
+              >
+                Edit
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close details"
+              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
+            >
+              x
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+          {/* Meta chips */}
+          <div className="flex flex-wrap items-center gap-2">
+            {activity.hours && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-ocean/10 text-ocean text-xs font-semibold">
+                Hours: {activity.hours}
+              </span>
+            )}
+            {activity.vibe.map((v) => (
+              <span key={v} className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${ACTIVITY_VIBE_COLORS[v] ?? 'bg-gray-100 text-gray-600'}`}>{v}</span>
+            ))}
+          </div>
+
+          {activity.description && (
+            <p className="text-gray-700 text-sm leading-relaxed">{activity.description}</p>
+          )}
+
+          {/* Photos section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-gray-700 text-sm">
+                Photos
+                {images.length > 0 && (
+                  <span className="ml-2 text-xs font-normal text-gray-400">{currentIndex + 1} / {images.length}</span>
+                )}
+              </h3>
+              {isJoef && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  aria-label="Upload photo"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-ocean text-white hover:bg-ocean/90 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean focus:ring-offset-2 disabled:opacity-60"
+                >
+                  {uploading ? '⏳ Uploading…' : '📷 Upload photo'}
+                </button>
+              )}
+              <input ref={fileInputRef} type="file" accept="image/*" multiple className="sr-only" aria-label="Upload activity photo" onChange={handleFileChange} />
+            </div>
+
+            {uploadError && (
+              <p role="alert" className="text-xs text-coral font-medium mb-2">⚠️ {uploadError}</p>
+            )}
+
+            {imagesLoading ? (
+              <div className="w-full rounded-2xl bg-gray-100 animate-pulse aspect-[4/3]" aria-label="Loading images" />
+            ) : images.length === 0 ? (
+              <div className="w-full border-2 border-dashed border-gray-200 rounded-2xl py-10 flex flex-col items-center gap-2 text-gray-400">
+                <span className="text-3xl" aria-hidden="true">🖼️</span>
+                <span className="text-sm font-medium">No photos yet</span>
+                {isJoef && (
+                  <button type="button" onClick={() => fileInputRef.current?.click()} className="text-xs text-ocean font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-ocean rounded">
+                    Tap to add the first photo
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="relative">
+                {/* Main slide */}
+                <div className="relative rounded-2xl overflow-hidden bg-gray-100 aspect-[4/3]">
+                  {currentImage && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={currentImage.image_url} alt={`${activity.name} photo ${currentIndex + 1}`} className="w-full h-full object-cover" />
+                  )}
+                </div>
+
+                {/* Prev / Next */}
+                {images.length > 1 && (
+                  <>
+                    <button type="button" aria-label="Previous photo" onClick={goPrev} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors focus:outline-none focus:ring-2 focus:ring-white text-lg leading-none">‹</button>
+                    <button type="button" aria-label="Next photo" onClick={goNext} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors focus:outline-none focus:ring-2 focus:ring-white text-lg leading-none">›</button>
+                  </>
+                )}
+
+                {/* Dot indicators */}
+                {images.length > 1 && (
+                  <div className="flex justify-center gap-1.5 mt-2" role="tablist" aria-label="Photo indicators">
+                    {images.map((img, i) => (
+                      <button key={img.id} type="button" role="tab" aria-selected={i === currentIndex} aria-label={`Photo ${i + 1}`} onClick={() => setCurrentIndex(i)}
+                        className={`w-2 h-2 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-ocean ${i === currentIndex ? 'bg-ocean scale-125' : 'bg-gray-300 hover:bg-gray-400'}`} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Thumbnail strip with ★ set-featured buttons */}
+                <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                  {images.map((img, i) => (
+                    <div key={img.id} className="relative flex-shrink-0">
+                      <button type="button" aria-label={`View photo ${i + 1}`} onClick={() => setCurrentIndex(i)}
+                        className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all focus:outline-none focus:ring-2 focus:ring-ocean block ${i === currentIndex ? 'border-ocean' : 'border-transparent opacity-60 hover:opacity-100'}`}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.image_url} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover" />
+                      </button>
+                      {isJoef && (
+                        <button
+                          type="button"
+                          aria-label={img.image_url === featuredUrl ? 'Featured image' : 'Set as featured card image'}
+                          aria-pressed={img.image_url === featuredUrl}
+                          onClick={() => handleSetFeatured(img.image_url)}
+                          disabled={settingFeatured}
+                          className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full border border-white flex items-center justify-center text-[9px] font-bold shadow transition-all focus:outline-none focus:ring-2 focus:ring-ocean disabled:opacity-50 ${
+                            img.image_url === featuredUrl ? 'bg-ocean text-white' : 'bg-gray-100 text-gray-400 hover:bg-ocean hover:text-white'
+                          }`}
+                        >
+                          ★
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {isJoef && (
+                    <button type="button" aria-label="Add more photos" onClick={() => fileInputRef.current?.click()}
+                      className="flex-shrink-0 w-14 h-14 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-ocean hover:text-ocean transition-colors focus:outline-none focus:ring-2 focus:ring-ocean text-xl">
+                      +
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Google Maps deep link */}
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${activity.lat},${activity.lng}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-xs text-ocean font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-ocean rounded"
+          >
+            🗺️ Open in Google Maps
+          </a>
+
+          {/* Toggle selection */}
+          <button
+            type="button"
+            onClick={onToggle}
+            className={`w-full py-3 rounded-2xl text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-ocean ${
+              isSelected ? 'bg-ocean/10 text-ocean border-2 border-ocean' : 'bg-ocean text-white'
+            }`}
+          >
+            {isSelected ? 'On my list - tap to remove' : 'Add to my list'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function ItineraryContent() {
   const router = useRouter()
   const userName = useAppStore((s) => s.userName)
   const setUserName = useAppStore((s) => s.setUserName)
-  const pollData = useAppStore((s) => s.pollData)
-  const allVotes = useAppStore((s) => s.allVotes)
-  const isReconnecting = useAppStore((s) => s.isReconnecting)
-  const activeDay = useAppStore((s) => s.activeDay)
-  const setActiveDay = useAppStore((s) => s.setActiveDay)
-
-  const [activeCategory, setActiveCategory] = useState<Category>('breakfast')
-  const [selectedVibes, setSelectedVibes] = useState<Set<Vibe>>(new Set())
-  const [mainTab, setMainTab] = useState<'restaurants' | 'activities'>('restaurants')
-  const [activeActivityTab, setActiveActivityTab] = useState<ActivityCategory>('morning')
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [showRename, setShowRename] = useState(false)
-  const [showMap, setShowMap] = useState(false)
-  const [venueForDetail, setVenueForDetail] = useState<Venue | null>(null)
-  const [showAdminModal, setShowAdminModal] = useState(false)
-  const [showTripConfigModal, setShowTripConfigModal] = useState(false)
   const tripConfig = useAppStore((s) => s.tripConfig)
   const setTripConfig = useAppStore((s) => s.setTripConfig)
+  const venues = useAppStore((s) => s.venues)
+  const activityVenues = useAppStore((s) => s.activityVenues)
+  const setActivityVenues = useAppStore((s) => s.setActivityVenues)
+  const selectedVenueIds = useAppStore((s) => s.selectedVenueIds)
+  const toggleVenueSelection = useAppStore((s) => s.toggleVenueSelection)
+  const selectedActivityIds = useAppStore((s) => s.selectedActivityIds)
+  const toggleActivitySelection = useAppStore((s) => s.toggleActivitySelection)
+
+  const [activeTimeOfDay, setActiveTimeOfDay] = useState<TimeOfDay>('morning')
+  const [selectedVibes, setSelectedVibes] = useState<Set<string>>(new Set())
+  const [visibleCount, setVisibleCount] = useState(10)
+  const [showMap, setShowMap] = useState(false)
+  const [venueForDetail, setVenueForDetail] = useState<Venue | null>(null)
+  const [activityForDetail, setActivityForDetail] = useState<Activity | null>(null)
+  const [showRename, setShowRename] = useState(false)
+  const [showAdminModal, setShowAdminModal] = useState(false)
+  const [showTripConfigModal, setShowTripConfigModal] = useState(false)
+  const [editItem, setEditItem] = useState<Venue | Activity | null>(null)
+  const [editItemType, setEditItemType] = useState<'restaurant' | 'activity'>('restaurant')
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useTripConfig()
-
+  const { refetch: refetchRestaurants } = useRestaurants()
   const { download: downloadItinerary, loading: pdfLoading, error: pdfError, setError: setPdfError } = useItineraryDownload()
 
-  // [AC-ITINPLAN0306-F11] Dynamic restaurants from DB with static fallback
-  const { venues, venueMap, refetch: refetchRestaurants } = useRestaurants()
-
-  // Auth guard — redirect effect only; loading is derived from userName directly [AC-ITINPLAN0306-F1]
+  // [AC-GUIDE-ERR1] Fetch activities from DB once; static ACTIVITIES fallback already in store
   useEffect(() => {
-    if (!userName) {
-      router.replace('/')
-    }
-  }, [userName, router])
+    fetch('/api/activities')
+      .then((r) => r.json())
+      .then((json) => {
+        const data: Activity[] = Array.isArray(json) ? json : (json.activities ?? [])
+        if (data.length > 0) setActivityVenues(data)
+      })
+      .catch(() => { /* keep static fallback */ })
+  }, [setActivityVenues])
 
-  usePollStream()
-  useActivityPollStream()
+  // Auth guard [AC-ITINPLAN0306-F1]
+  useEffect(() => {
+    if (!userName) router.replace('/')
+  }, [userName, router])
 
   function showToast(msg: string) {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 4000)
   }
 
-  const { isSelected, toggleVote, clearDayVotes, selectedVenueIds } = useVotes({ onError: showToast, day: activeDay })
-  const { isSelected: isActivitySelected, toggleVote: toggleActivityVote, clearDayVotes: clearDayActivityVotes } = useActivityVotes({ onError: showToast, day: activeDay })
-  const selectedActivityIds = useAppStore((s) => s.selectedActivityIds)
-
-  // Activity store state [AC-ACTIVITIES-F11]
-  const activityAllVotes = useAppStore((s) => s.activityAllVotes)
-  const activityVenues = useAppStore((s) => s.activityVenues)
-
-  const dayPrefix = `d${activeDay}:`
-  const activityDayPrefix = `d${activeDay}:act:`
-
-  // Count of the current user's own votes for the active day
-  const myDayVoteCount = useMemo(
-    () => [...selectedVenueIds].filter((id) => id.startsWith(dayPrefix)).length,
-    [selectedVenueIds, dayPrefix]
-  )
-
-  const myDayActivityVoteCount = useMemo(
-    () => [...selectedActivityIds].filter((id) => id.startsWith(activityDayPrefix)).length,
-    [selectedActivityIds, activityDayPrefix]
-  )
-
-  const voteCountByVenue = useMemo(() => {
-    const map: Record<string, number> = {}
-    for (const vote of allVotes) {
-      if (!vote.venue_id.startsWith(dayPrefix)) continue
-      const base = vote.venue_id.slice(dayPrefix.length)
-      map[base] = (map[base] ?? 0) + 1
-    }
-    return map
-  }, [allVotes, dayPrefix])
-
-  const activityVoteCountById = useMemo(() => {
-    const map: Record<string, number> = {}
-    for (const vote of activityAllVotes) {
-      if (!vote.activity_id.startsWith(activityDayPrefix)) continue
-      const base = vote.activity_id.slice(activityDayPrefix.length)
-      map[base] = (map[base] ?? 0) + 1
-    }
-    return map
-  }, [activityAllVotes, activityDayPrefix])
-
-  // Filtered activities for current day+time tab [AC-ACTIVITIES-F11]
-  const filteredActivities = useMemo(
-    () => activityVenues.filter((a) => a.category === activeActivityTab),
-    [activityVenues, activeActivityTab]
-  )
-
-  // Votes for this day — MapView strips the prefix internally
-  const dayVotes = useMemo(
-    () => allVotes.filter((v) => v.venue_id.startsWith(dayPrefix)),
-    [allVotes, dayPrefix]
-  )
-
-  // Votes for this day AND the active category (used for inline map)
-  const categoryDayVotes = useMemo(
-    () =>
-      dayVotes.filter((v) => {
-        const base = v.venue_id.slice(dayPrefix.length)
-        return venueMap[base]?.category === activeCategory
-      }),
-    [dayVotes, dayPrefix, venueMap, activeCategory]
-  )
-
-  const filteredVenues = useMemo(
-    () => filterVenues(venues, activeCategory, selectedVibes),
-    [venues, activeCategory, selectedVibes]
-  )
-
-  const handleTabChange = useCallback((cat: Category) => {
-    setActiveCategory(cat)
-    setSelectedVibes(new Set())
-  }, [])
-
   function handleRenameSuccess(newName: string) {
     setUserName(newName)
     setShowRename(false)
-    showToast(`Name changed to "${newName}" ✓`)
+    showToast(`Name changed to "${newName}"`)
   }
+
+  const handleTabChange = useCallback((tod: TimeOfDay) => {
+    setActiveTimeOfDay(tod)
+    setSelectedVibes(new Set())
+    setVisibleCount(10)
+  }, [])
+
+  // [AC-GUIDE-F8] All selected items across all time-of-day tabs (for the map)
+  const selectedVenues = useMemo(
+    () => venues.filter((v) => selectedVenueIds.has(v.id)),
+    [venues, selectedVenueIds]
+  )
+  const selectedActivities = useMemo(
+    () => activityVenues.filter((a) => selectedActivityIds.has(a.id)),
+    [activityVenues, selectedActivityIds]
+  )
+
+  // [AC-GUIDE-F1, F2] Combined feed for the current time-of-day tab
+  const restaurantCategory = timeOfDayToCategory(activeTimeOfDay)
+  const filteredRestaurants = useMemo(
+    () => filterVenues(venues, restaurantCategory, selectedVibes),
+    [venues, restaurantCategory, selectedVibes]
+  )
+  const filteredActivities = useMemo(
+    () => {
+      const byCategory = activityVenues.filter((a) => a.category === activeTimeOfDay)
+      if (selectedVibes.size === 0) return byCategory
+      return byCategory.filter((a) => a.vibe.some((v) => selectedVibes.has(v)))
+    },
+    [activityVenues, activeTimeOfDay, selectedVibes]
+  )
+
+  // Unique vibes from all items for the current tab (before vibe filter) [dynamic]
+  const availableVibes = useMemo(() => {
+    const allRestaurants = filterVenues(venues, restaurantCategory, new Set())
+    const allActivities = activityVenues.filter((a) => a.category === activeTimeOfDay)
+    const combined = [
+      ...allRestaurants.flatMap((r) => r.vibe),
+      ...allActivities.flatMap((a) => a.vibe),
+    ]
+    return [...new Set(combined)].sort((a, b) => a.localeCompare(b))
+  }, [venues, restaurantCategory, activityVenues, activeTimeOfDay])
+
+  // Paginated combined feed — restaurants first, then activities [AC-GUIDE-F1]
+  const allFeedItems = useMemo<Array<{ kind: 'restaurant'; data: Venue } | { kind: 'activity'; data: Activity }>>(() => [
+    ...filteredRestaurants.map((r) => ({ kind: 'restaurant' as const, data: r })),
+    ...filteredActivities.map((a) => ({ kind: 'activity' as const, data: a })),
+  ], [filteredRestaurants, filteredActivities])
+  const visibleItems = allFeedItems.slice(0, visibleCount)
+  const hasMore = visibleCount < allFeedItems.length
+  const hasItems = allFeedItems.length > 0
+  const selectedCount = selectedVenues.length + selectedActivities.length
 
   if (!userName) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-ocean animate-pulse text-lg">Loading…</div>
+        <div className="text-ocean animate-pulse text-lg">Loading...</div>
       </div>
     )
   }
 
   return (
     <>
-      <div className="lg:grid lg:grid-cols-[1fr_340px] lg:gap-6 max-w-7xl mx-auto px-4 py-6">
-        {/* ── Main column ─────────────────────────────────────────────── */}
-        <div>
-          {/* Header */}
-          <div className="flex items-start justify-between gap-3 mb-5 animate-fade-in">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">
-                Hey {userName ?? 'there'} 👋
-              </h1>
-              <p className="text-gray-500 text-sm mt-0.5">
-                Pick where you want to eat — La Union outing!
-              </p>
-            </div>
-            {/* [AC-AITINPDF-F1] Header actions row */}
-            <div className="flex-shrink-0 mt-1 flex gap-2">
-              {/* [AC-AITINPDF-F1, F2] Download button — visible to all logged-in users */}
+      <div className="max-w-lg mx-auto px-4 pt-4 pb-32">
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 mb-5 animate-fade-in">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">
+              Hey {userName}!
+            </h1>
+            <p className="text-gray-500 text-sm mt-0.5">Your La Union guide</p>
+          </div>
+
+          <div className="flex-shrink-0 flex flex-col items-end gap-2">
+            <div className="flex gap-2">
+              {/* [AC-AITINPDF-F1] Download PDF */}
               <button
                 type="button"
                 onClick={() => { setPdfError(null); downloadItinerary() }}
@@ -186,245 +442,140 @@ function ItineraryContent() {
                 {pdfLoading ? (
                   <>
                     <span className="inline-block w-3 h-3 rounded-full border-2 border-ocean border-t-transparent animate-spin" aria-hidden="true" />
-                    Generating…
+                    Generating...
                   </>
-                ) : '📄 Download Itinerary'}
+                ) : 'Download PDF'}
               </button>
               <button
                 type="button"
                 onClick={() => setShowRename(true)}
                 aria-label="Change your name"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 text-xs font-medium hover:border-ocean hover:text-ocean transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
+                className="px-3 py-1.5 rounded-xl border border-gray-200 text-gray-500 text-xs font-medium hover:border-ocean hover:text-ocean transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
               >
-                ✏️ Rename
+                Edit Name
               </button>
             </div>
-          </div>
-          {/* [AC-AITINPDF-E1, ERR1] PDF error banner */}
-          {pdfError && (
-            <div
-              role="alert"
-              className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-coral/10 border border-coral/30 text-coral text-xs font-medium animate-fade-in"
-            >
-              <span>⚠️ {pdfError}</span>
-              <button
-                type="button"
-                onClick={() => setPdfError(null)}
-                aria-label="Dismiss error"
-                className="ml-2 text-coral/70 hover:text-coral text-sm"
-              >✕</button>
-            </div>
-          )}
 
-          {/* ── Restaurants | Activities tab switcher [AC-ACTIVITIES-F11] ── */}
-          <div className="flex gap-2 p-1 bg-gray-100 rounded-xl mb-5" role="tablist" aria-label="Vote category">
+            {/* [AC-GUIDE-F7] Map toggle with selection count badge */}
             <button
-              role="tab"
-              aria-selected={mainTab === 'restaurants'}
-              onClick={() => setMainTab('restaurants')}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${
-                mainTab === 'restaurants' ? 'bg-white text-ocean shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
+              type="button"
+              onClick={() => setShowMap((v) => !v)}
+              aria-expanded={showMap}
+              aria-controls="inline-map"
+              className={`
+                relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border
+                transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ocean
+                ${showMap
+                  ? 'border-ocean bg-ocean text-white shadow-sm shadow-ocean/30'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-ocean hover:text-ocean'
+                }
+              `}
             >
-              🍽️ Restaurants
-            </button>
-            <button
-              role="tab"
-              aria-selected={mainTab === 'activities'}
-              onClick={() => setMainTab('activities')}
-              className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all ${
-                mainTab === 'activities' ? 'bg-white text-ocean shadow-sm' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              🎯 Activities
-            </button>
-          </div>
-
-          {/* ── Day strip (left) + Content (right) ────────────────────── */}
-          <div className="flex gap-4 items-start">
-            {/* Vertical day tabs + clear CTA — sticky so always visible while scrolling */}
-            <div className="flex-shrink-0 flex flex-col items-center gap-2 sticky top-0 sm:top-16 self-start z-10">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center leading-none">
-                Day
-              </p>
-              <DayTabs active={activeDay} onChange={setActiveDay} orientation="vertical" />
-
-              {/* Clear all my votes for this day */}
-              {mainTab === 'restaurants' && myDayVoteCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => clearDayVotes()}
-                  aria-label={`Clear all your Day ${activeDay} restaurant votes`}
-                  title={`Clear ${myDayVoteCount} vote${myDayVoteCount !== 1 ? 's' : ''} for Day ${activeDay}`}
-                  className="w-14 flex flex-col items-center gap-0.5 py-2 rounded-xl bg-coral/10 hover:bg-coral/20 text-coral border border-coral/30 transition-colors focus:outline-none focus:ring-2 focus:ring-coral text-center"
+              {showMap ? 'Hide Map' : 'Show Map'}
+              {selectedCount > 0 && (
+                <span
+                  aria-label={`${selectedCount} selected`}
+                  className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] rounded-full text-[10px] font-bold flex items-center justify-center px-1 ${
+                    showMap ? 'bg-white text-ocean' : 'bg-ocean text-white'
+                  }`}
                 >
-                  <span className="text-sm" aria-hidden="true">🗑️</span>
-                  <span className="text-[9px] font-bold leading-none">{myDayVoteCount}v</span>
-                  <span className="text-[8px] leading-none opacity-80">clear</span>
-                </button>
+                  {selectedCount}
+                </span>
               )}
-              {mainTab === 'activities' && myDayActivityVoteCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => clearDayActivityVotes()}
-                  aria-label={`Clear all your Day ${activeDay} activity votes`}
-                  title={`Clear ${myDayActivityVoteCount} activity vote${myDayActivityVoteCount !== 1 ? 's' : ''} for Day ${activeDay}`}
-                  className="w-14 flex flex-col items-center gap-0.5 py-2 rounded-xl bg-coral/10 hover:bg-coral/20 text-coral border border-coral/30 transition-colors focus:outline-none focus:ring-2 focus:ring-coral text-center"
-                >
-                  <span className="text-sm" aria-hidden="true">🗑️</span>
-                  <span className="text-[9px] font-bold leading-none">{myDayActivityVoteCount}v</span>
-                  <span className="text-[8px] leading-none opacity-80">clear</span>
-                </button>
-              )}
-            </div>
-
-            {/* Right: filters + map + cards */}
-            <div className="flex-1 min-w-0">
-
-              {/* ── RESTAURANTS tab content ── */}
-              {mainTab === 'restaurants' && (
-                <>
-                  {/* ── Sticky controls bar: category + vibes + map button ── */}
-                  <div className="sticky top-0 sm:top-14 z-20 bg-[#FBE9D0]/95 backdrop-blur-sm -mx-1 px-1 pt-1 pb-3 space-y-3">
-                {/* Category tabs */}
-                <CategoryTabs active={activeCategory} onChange={handleTabChange} />
-
-                {/* Vibe filter */}
-                <VibeFilter selected={selectedVibes} onChange={setSelectedVibes} />
-
-                {/* Map toggle row */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400 font-medium">
-                    {filteredVenues.length} spot{filteredVenues.length !== 1 ? 's' : ''}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowMap((v) => !v)}
-                    aria-expanded={showMap}
-                    aria-controls="inline-map"
-                    className={`
-                      flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold
-                      border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-ocean
-                      ${showMap
-                        ? 'border-ocean bg-ocean text-white shadow-sm shadow-ocean/30'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-ocean hover:text-ocean'
-                      }
-                    `}
-                  >
-                    🗺️ {showMap ? 'Hide map' : 'Show map'}
-                  </button>
-                </div>
-              </div>
-
-              {/* ── Scrollable content: map + venue grid ── */}
-              <div className="space-y-4">
-              {/* Inline map */}
-              {showMap && (
-                <div id="inline-map" className="animate-fade-in">
-                  <MapView votes={categoryDayVotes} venueMap={venueMap} />
-                </div>
-              )}
-
-              {/* Venue grid [AC-ITINPLAN0306-F3, F4] */}
-              <div
-                role="tabpanel"
-                aria-label={`Day ${activeDay} ${activeCategory} venues`}
-              >
-                {filteredVenues.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center animate-fade-in">
-                    <span className="text-4xl mb-3" aria-hidden="true">🌴</span>
-                    <p className="font-semibold text-gray-600">
-                      No spots match this vibe — try another!
-                    </p>
-                    <button
-                      onClick={() => setSelectedVibes(new Set())}
-                      className="mt-3 px-4 py-2 text-sm text-ocean font-semibold hover:underline focus:outline-none focus:ring-2 focus:ring-ocean rounded-lg"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
-                    {filteredVenues.map((venue) => (
-                      <RestaurantCard
-                        key={venue.id}
-                        venue={venue}
-                        selected={isSelected(venue.id)}
-                        voteCount={voteCountByVenue[venue.id] ?? 0}
-                        onToggle={toggleVote}
-                        onInfoClick={setVenueForDetail}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-              </div>{/* end scrollable content */}
-                </>
-              )}{/* end restaurants tab */}
-
-              {/* ── ACTIVITIES tab content [AC-ACTIVITIES-F8, F11] ── */}
-              {mainTab === 'activities' && (
-                <>
-                  {/* Time-of-day tabs */}
-                  <div className="flex gap-2 mb-4" role="tablist" aria-label="Activity time of day">
-                    {(['morning', 'afternoon', 'evening'] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        role="tab"
-                        aria-selected={activeActivityTab === tab}
-                        onClick={() => setActiveActivityTab(tab)}
-                        className={`flex-1 py-2 px-2 rounded-xl text-xs font-semibold transition-all capitalize focus:outline-none focus:ring-2 focus:ring-ocean ${
-                          activeActivityTab === tab
-                            ? 'bg-ocean text-white shadow-sm'
-                            : 'bg-white text-gray-500 border border-gray-200 hover:border-ocean/40'
-                        }`}
-                      >
-                        {tab === 'morning' ? '🌅' : tab === 'afternoon' ? '☀️' : '🌙'} {tab}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Activity cards */}
-                  <div
-                    role="tabpanel"
-                    aria-label={`Day ${activeDay} ${activeActivityTab} activities`}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in"
-                  >
-                    {filteredActivities.map((activity) => (
-                      <ActivityCard
-                        key={activity.id}
-                        activity={activity}
-                        selected={isActivitySelected(activity.id)}
-                        voteCount={activityVoteCountById[activity.id] ?? 0}
-                        onToggle={toggleActivityVote}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}{/* end activities tab */}
-
-            </div>
+            </button>
           </div>
         </div>
 
-        {/* ── Poll sidebar (desktop) ──────────────────────────────────── */}
-        <div className="hidden lg:block sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto">
-          <PollSidebar pollData={pollData} isReconnecting={isReconnecting} />
-        </div>
-
-        {/* ── Toast [AC-ITINPLAN0306-ERR1] ───────────────────────────── */}
-        {toastMessage && (
+        {/* PDF error banner */}
+        {pdfError && (
           <div
             role="alert"
-            aria-live="assertive"
-            data-testid="toast-error"
-            className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 bg-coral text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-medium animate-slide-up"
+            className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium animate-fade-in"
           >
-            ⚠️ {toastMessage}
+            <span>Error: {pdfError}</span>
+            <button
+              type="button"
+              onClick={() => setPdfError(null)}
+              aria-label="Dismiss error"
+              className="text-red-400 hover:text-red-600 text-sm"
+            >x</button>
+          </div>
+        )}
+
+        {/* [AC-GUIDE-F7] Inline map panel */}
+        {showMap && (
+          <div id="inline-map" className="mb-5 rounded-2xl overflow-hidden animate-fade-in">
+            <MapView
+              selectedVenues={selectedVenues}
+              selectedActivities={selectedActivities}
+              tripConfig={tripConfig}
+            />
+          </div>
+        )}
+
+        {/* [AC-GUIDE-F1] Time-of-day tabs */}
+        <div className="mb-4">
+          <CategoryTabs active={activeTimeOfDay} onChange={handleTabChange} />
+        </div>
+
+        {/* Vibe filter — dynamic from current tab's items */}
+        <div className="mb-5">
+          <VibeFilter vibes={availableVibes} selected={selectedVibes} onChange={(v) => { setSelectedVibes(v); setVisibleCount(10) }} />
+        </div>
+
+        {/* Combined card feed — restaurants first, then activities */}
+        {hasItems ? (
+          <div className="grid grid-cols-1 gap-5 animate-fade-in">
+            {visibleItems.map((entry) =>
+              entry.kind === 'restaurant' ? (
+                <RestaurantCard
+                  key={entry.data.id}
+                  venue={entry.data}
+                  selected={selectedVenueIds.has(entry.data.id)}
+                  onToggle={toggleVenueSelection}
+                  onInfoClick={setVenueForDetail}
+                />
+              ) : (
+                <ActivityCard
+                  key={entry.data.id}
+                  activity={entry.data}
+                  selected={selectedActivityIds.has(entry.data.id)}
+                  onToggle={toggleActivitySelection}
+                  onInfoClick={setActivityForDetail}
+                />
+              )
+            )}
+            {hasMore && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount((c) => c + 10)}
+                className="w-full py-3 rounded-2xl border-2 border-ocean/30 text-ocean font-semibold text-sm hover:border-ocean hover:bg-ocean/5 transition-all focus:outline-none focus:ring-2 focus:ring-ocean"
+              >
+                Load more
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-16 text-center animate-fade-in">
+            <p className="font-semibold text-gray-600 text-lg">Nothing here yet</p>
+            <p className="text-gray-400 text-sm mt-1">More spots coming soon!</p>
           </div>
         )}
       </div>
 
+      {/* Toast */}
+      {toastMessage && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          data-testid="toast-error"
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-ocean text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-medium animate-slide-up"
+        >
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Rename modal */}
       {showRename && userName && (
         <RenameModal
           currentName={userName}
@@ -433,14 +584,36 @@ function ItineraryContent() {
         />
       )}
 
+      {/* Venue detail modal */}
       {venueForDetail && (
         <VenueDetailModal
           venue={venueForDetail}
+          onEdit={() => {
+            setEditItem(venueForDetail)
+            setEditItemType('restaurant')
+            setVenueForDetail(null)
+          }}
           onClose={() => setVenueForDetail(null)}
         />
       )}
 
-      {/* [AC-ITINPLAN0306-F14] Joef-only: Admin FAB + modal */}
+      {/* Activity detail sheet */}
+      {activityForDetail && (
+        <ActivityDetailSheet
+          activity={activityForDetail}
+          isSelected={selectedActivityIds.has(activityForDetail.id)}
+          userName={userName}
+          onToggle={() => toggleActivitySelection(activityForDetail.id)}
+          onClose={() => setActivityForDetail(null)}
+          onEdit={() => {
+            setEditItem(activityForDetail)
+            setEditItemType('activity')
+            setActivityForDetail(null)
+          }}
+        />
+      )}
+
+      {/* Joef-only admin FABs */}
       {userName === 'Joef' && (
         <>
           {/* [AC-TRIPCONFIG-F1] Trip config FAB */}
@@ -449,22 +622,35 @@ function ItineraryContent() {
             onClick={() => setShowTripConfigModal(true)}
             aria-label="Configure trip"
             data-testid="trip-config-fab"
-            className="fixed bottom-6 right-[5.5rem] z-40 w-14 h-14 rounded-full bg-sand text-white shadow-xl flex items-center justify-center text-2xl hover:bg-sand/90 transition-all focus:outline-none focus:ring-4 focus:ring-sand/40 active:scale-95"
+            className="fixed bottom-24 right-[5.5rem] z-40 w-14 h-14 rounded-full bg-sand text-white shadow-xl flex items-center justify-center text-sm font-bold hover:bg-sand/90 transition-all focus:outline-none focus:ring-4 focus:ring-sand/40 active:scale-95"
           >
-            ⚙️
+            Config
           </button>
           <button
             type="button"
             onClick={() => setShowAdminModal(true)}
             aria-label="Add restaurant"
             data-testid="admin-fab"
-            className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-ocean text-white shadow-xl flex items-center justify-center text-2xl hover:bg-ocean/90 transition-all focus:outline-none focus:ring-4 focus:ring-ocean/40 active:scale-95"
+            className="fixed bottom-24 right-6 z-40 w-14 h-14 rounded-full bg-ocean text-white shadow-xl flex items-center justify-center text-2xl font-bold hover:bg-ocean/90 transition-all focus:outline-none focus:ring-4 focus:ring-ocean/40 active:scale-95"
           >
-            ➕
+            +
           </button>
           {showAdminModal && (
             <AdminRestaurantModal
-              onCreated={() => { setShowAdminModal(false); refetchRestaurants() }}
+              onCreated={(type) => {
+              setShowAdminModal(false)
+              if (type === 'activity') {
+                fetch('/api/activities')
+                  .then((r) => r.json())
+                  .then((json) => {
+                    const data: Activity[] = Array.isArray(json) ? json : (json.activities ?? [])
+                    if (data.length > 0) setActivityVenues(data)
+                  })
+                  .catch(() => {})
+              } else {
+                refetchRestaurants()
+              }
+            }}
               onClose={() => setShowAdminModal(false)}
             />
           )}
@@ -476,6 +662,16 @@ function ItineraryContent() {
             />
           )}
         </>
+      )}
+
+      {/* Edit modal — restaurant or activity */}
+      {editItem && (
+        <AdminEditModal
+          item={editItem}
+          itemType={editItemType}
+          onSaved={() => setEditItem(null)}
+          onClose={() => setEditItem(null)}
+        />
       )}
     </>
   )

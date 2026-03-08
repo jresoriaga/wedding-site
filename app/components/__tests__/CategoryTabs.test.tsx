@@ -3,33 +3,49 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CategoryTabs from '../CategoryTabs'
 
+// [AC-GUIDE-F1] CategoryTabs now uses TimeOfDay: morning / afternoon / evening
+
 describe('CategoryTabs', () => {
-  it('[AC-ITINPLAN0306-F3] renders all 3 category tabs', () => {
-    render(<CategoryTabs active="breakfast" onChange={vi.fn()} />)
-    expect(screen.getByTestId('category-tab-breakfast')).toBeInTheDocument()
-    expect(screen.getByTestId('category-tab-lunch')).toBeInTheDocument()
-    expect(screen.getByTestId('category-tab-dinner')).toBeInTheDocument()
+  it('[AC-GUIDE-F1] renders Morning, Afternoon, Evening tabs', () => {
+    render(<CategoryTabs active="morning" onChange={vi.fn()} />)
+    expect(screen.getByText('Morning')).toBeInTheDocument()
+    expect(screen.getByText('Afternoon')).toBeInTheDocument()
+    expect(screen.getByText('Evening')).toBeInTheDocument()
   })
 
-  it('[AC-ITINPLAN0306-F3] active tab has aria-selected="true"', () => {
-    render(<CategoryTabs active="lunch" onChange={vi.fn()} />)
-    expect(screen.getByTestId('category-tab-lunch')).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByTestId('category-tab-breakfast')).toHaveAttribute('aria-selected', 'false')
-    expect(screen.getByTestId('category-tab-dinner')).toHaveAttribute('aria-selected', 'false')
+  it('[AC-GUIDE-F1] has data-testid for each tab', () => {
+    render(<CategoryTabs active="morning" onChange={vi.fn()} />)
+    expect(screen.getByTestId('category-tab-morning')).toBeInTheDocument()
+    expect(screen.getByTestId('category-tab-afternoon')).toBeInTheDocument()
+    expect(screen.getByTestId('category-tab-evening')).toBeInTheDocument()
   })
 
-  it('[AC-ITINPLAN0306-F3] clicking Lunch tab calls onChange with "lunch"', async () => {
+  it('[AC-GUIDE-F1] active tab has aria-selected="true"', () => {
+    render(<CategoryTabs active="afternoon" onChange={vi.fn()} />)
+    expect(screen.getByTestId('category-tab-afternoon')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('category-tab-morning')).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getByTestId('category-tab-evening')).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('[AC-GUIDE-F1] clicking Evening calls onChange with "evening"', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<CategoryTabs active="breakfast" onChange={onChange} />)
-    await user.click(screen.getByTestId('category-tab-lunch'))
-    expect(onChange).toHaveBeenCalledWith('lunch')
+    render(<CategoryTabs active="morning" onChange={onChange} />)
+    await user.click(screen.getByTestId('category-tab-evening'))
+    expect(onChange).toHaveBeenCalledWith('evening')
   })
 
-  it('[AC-ITINPLAN0306-E6] tabs are accessible via role=tablist + role=tab', () => {
-    render(<CategoryTabs active="breakfast" onChange={vi.fn()} />)
+  it('[AC-GUIDE-F1] clicking Morning calls onChange with "morning"', async () => {
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(<CategoryTabs active="evening" onChange={onChange} />)
+    await user.click(screen.getByTestId('category-tab-morning'))
+    expect(onChange).toHaveBeenCalledWith('morning')
+  })
+
+  it('[AC-GUIDE-F1] tabs are accessible via role=tablist + role=tab', () => {
+    render(<CategoryTabs active="morning" onChange={vi.fn()} />)
     expect(screen.getByRole('tablist')).toBeInTheDocument()
-    const tabs = screen.getAllByRole('tab')
-    expect(tabs).toHaveLength(3)
+    expect(screen.getAllByRole('tab')).toHaveLength(3)
   })
 })

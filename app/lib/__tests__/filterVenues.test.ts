@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filterVenues } from '../filterVenues'
+import { filterVenues, timeOfDayToCategory, safeImageUrl } from '../filterVenues'
 import type { Venue, Vibe } from '../types'
 
 const mockVenues: Venue[] = [
@@ -62,5 +62,47 @@ describe('filterVenues', () => {
       new Set<Vibe>(['casual dining', 'street food'])
     )
     expect(result).toHaveLength(2)
+  })
+})
+
+// ── Cycle 1: timeOfDayToCategory [AC-GUIDE-F1] ───────────────────────────────
+describe('timeOfDayToCategory', () => {
+  it('[AC-GUIDE-F1] maps morning → breakfast', () => {
+    expect(timeOfDayToCategory('morning')).toBe('breakfast')
+  })
+
+  it('[AC-GUIDE-F1] maps afternoon → lunch', () => {
+    expect(timeOfDayToCategory('afternoon')).toBe('lunch')
+  })
+
+  it('[AC-GUIDE-F1] maps evening → dinner', () => {
+    expect(timeOfDayToCategory('evening')).toBe('dinner')
+  })
+})
+
+// ── Cycle 2: safeImageUrl [AC-GUIDE-S1] ──────────────────────────────────────
+describe('safeImageUrl', () => {
+  it('[AC-GUIDE-S1] returns null for undefined', () => {
+    expect(safeImageUrl(undefined)).toBeNull()
+  })
+
+  it('[AC-GUIDE-S1] returns null for empty string', () => {
+    expect(safeImageUrl('')).toBeNull()
+  })
+
+  it('[AC-GUIDE-S1] rejects javascript: protocol URLs', () => {
+    expect(safeImageUrl('javascript:alert(1)')).toBeNull()
+  })
+
+  it('[AC-GUIDE-S1] rejects data: URLs', () => {
+    expect(safeImageUrl('data:image/png;base64,abc')).toBeNull()
+  })
+
+  it('[AC-GUIDE-S1] rejects http:// (non-secure)', () => {
+    expect(safeImageUrl('http://example.com/img.jpg')).toBeNull()
+  })
+
+  it('[AC-GUIDE-S1] accepts https:// URLs unchanged', () => {
+    expect(safeImageUrl('https://example.com/img.jpg')).toBe('https://example.com/img.jpg')
   })
 })

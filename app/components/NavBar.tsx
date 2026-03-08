@@ -3,12 +3,10 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const NAV_ITEMS = [
-  { href: '/itinerary', label: 'Itinerary', emoji: '🍽️' },
-  { href: '/poll', label: 'Poll', emoji: '📊' },
-  { href: '/map', label: 'Map', emoji: '🗺️' },
+  { href: '/itinerary', label: 'Guide' },
 ]
 
-// [AC-ITINPLAN0306-F10] Mobile-first responsive nav [WCAG:1.3.1, 2.1.1, 2.4.7]
+// [AC-GUIDE-F9] Single-item nav — guide only [WCAG:1.3.1, 2.1.1, 2.4.7]
 export default function NavBar() {
   const pathname = usePathname()
 
@@ -20,11 +18,10 @@ export default function NavBar() {
         className="hidden sm:flex fixed top-0 left-0 right-0 z-50 bg-ocean/95 backdrop-blur-md border-b border-ocean/20 px-6 py-3 items-center justify-between shadow-md"
       >
         <Link href="/itinerary" className="flex items-center gap-2 text-white font-bold text-lg">
-          <span aria-hidden="true">🌊</span>
-          <span>LU Itenerary Planner</span>
+          La Union Guide
         </Link>
         <div className="flex items-center gap-1" role="menubar">
-          {NAV_ITEMS.map(({ href, label, emoji }) => {
+          {NAV_ITEMS.map(({ href, label }) => {
             const isActive = pathname === href
             return (
               <Link
@@ -41,7 +38,6 @@ export default function NavBar() {
                   }
                 `}
               >
-                <span aria-hidden="true">{emoji}</span>
                 {label}
               </Link>
             )
@@ -54,7 +50,7 @@ export default function NavBar() {
         aria-label="Main navigation"
         className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-200 px-2 py-2 flex items-center shadow-xl"
       >
-        {NAV_ITEMS.map(({ href, label, emoji }) => {
+        {NAV_ITEMS.map(({ href, label }) => {
           const isActive = pathname === href
           return (
             <Link
@@ -67,7 +63,7 @@ export default function NavBar() {
                 ${isActive ? 'text-ocean' : 'text-gray-400 hover:text-ocean'}
               `}
             >
-              <span className="text-xl" aria-hidden="true">{emoji}</span>
+
               {label}
             </Link>
           )

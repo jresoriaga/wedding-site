@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import ActivityCard from '../ActivityCard'
 import type { Activity } from '@/app/lib/types'
 
-// [AC-ACTIVITIES-F8] ActivityCard component tests
+// [AC-GUIDE-F3, F4, F5, F6, E1, S1, S2, F11] — ActivityCard guide mode
 
 const MOCK_ACTIVITY: Activity = {
   id: 'surf-01',
@@ -17,120 +18,183 @@ const MOCK_ACTIVITY: Activity = {
   hours: '6:00 AM – 6:00 PM',
 }
 
+const MOCK_ACTIVITY_WITH_IMAGE: Activity = {
+  ...MOCK_ACTIVITY,
+  id: 'surf-02',
+  imageUrl: 'https://example.com/surf.jpg',
+}
+
 describe('ActivityCard', () => {
-  it('[AC-ACTIVITIES-F8] renders activity name', () => {
+  it('[AC-GUIDE-F3] renders hero image when imageUrl is a valid https URL', () => {
+    render(
+      <ActivityCard
+        activity={MOCK_ACTIVITY_WITH_IMAGE}
+        selected={false}
+        onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
+      />
+    )
+    const img = screen.getByRole('img', { name: /Surfing at San Juan/i })
+    expect(img).toBeInTheDocument()
+    expect(img).toHaveAttribute('src', 'https://example.com/surf.jpg')
+  })
+
+  it('[AC-GUIDE-P1] hero image has loading="lazy"', () => {
+    render(
+      <ActivityCard
+        activity={MOCK_ACTIVITY_WITH_IMAGE}
+        selected={false}
+        onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
+      />
+    )
+    expect(screen.getByRole('img', { name: /Surfing at San Juan/i })).toHaveAttribute('loading', 'lazy')
+  })
+
+  it('[AC-GUIDE-E1] renders placeholder when imageUrl is absent', () => {
     render(
       <ActivityCard
         activity={MOCK_ACTIVITY}
         selected={false}
-        voteCount={0}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
+      />
+    )
+    expect(screen.getByTestId('card-image-placeholder')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /Surfing at San Juan/i })).not.toBeInTheDocument()
+  })
+
+  it('[AC-GUIDE-S1] renders placeholder when imageUrl is unsafe (non-https)', () => {
+    const unsafeActivity: Activity = { ...MOCK_ACTIVITY, id: 'surf-xss', imageUrl: 'javascript:alert(1)' }
+    render(
+      <ActivityCard
+        activity={unsafeActivity}
+        selected={false}
+        onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
+      />
+    )
+    expect(screen.getByTestId('card-image-placeholder')).toBeInTheDocument()
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
+
+  it('[AC-GUIDE-F5] renders activity name and address', () => {
+    render(
+      <ActivityCard
+        activity={MOCK_ACTIVITY}
+        selected={false}
+        onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
     expect(screen.getByText('Surfing at San Juan')).toBeInTheDocument()
-  })
-
-  it('[AC-ACTIVITIES-F8] renders activity address', () => {
-    render(
-      <ActivityCard
-        activity={MOCK_ACTIVITY}
-        selected={false}
-        voteCount={0}
-        onToggle={vi.fn()}
-      />
-    )
     expect(screen.getByText(/Urbiztondo/)).toBeInTheDocument()
   })
 
-  it('[AC-ACTIVITIES-F8] aria-pressed is false when not selected', () => {
+  it('[AC-GUIDE-F5] aria-pressed is false when not selected', () => {
     render(
       <ActivityCard
         activity={MOCK_ACTIVITY}
         selected={false}
-        voteCount={0}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
-    const card = screen.getByTestId('activity-card-surf-01')
-    expect(card).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('activity-card-surf-01')).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('[AC-ACTIVITIES-F8] aria-pressed is true when selected', () => {
+  it('[AC-GUIDE-F5] aria-pressed is true when selected', () => {
     render(
       <ActivityCard
         activity={MOCK_ACTIVITY}
         selected={true}
-        voteCount={2}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
-    const card = screen.getByTestId('activity-card-surf-01')
-    expect(card).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('activity-card-surf-01')).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('[AC-ACTIVITIES-F8] calls onToggle with activity id when clicked', () => {
+  it('[AC-GUIDE-F5] calls onToggle with activity id when clicked', () => {
     const onToggle = vi.fn()
     render(
       <ActivityCard
         activity={MOCK_ACTIVITY}
         selected={false}
-        voteCount={0}
         onToggle={onToggle}
+        onInfoClick={vi.fn()}
       />
     )
     fireEvent.click(screen.getByTestId('activity-card-surf-01'))
     expect(onToggle).toHaveBeenCalledWith('surf-01')
   })
 
-  it('[AC-ACTIVITIES-F8] shows vote count when greater than zero', () => {
+  it('[AC-GUIDE-F11] does not render vote count numbers', () => {
     render(
       <ActivityCard
         activity={MOCK_ACTIVITY}
         selected={false}
-        voteCount={3}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
-    // Vote count shown via aria-label on the span
-    expect(screen.getByLabelText('3 votes')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/votes/i)).not.toBeInTheDocument()
   })
 
-  it('[AC-ACTIVITIES-F8] shows voter names when provided', () => {
+  it('[AC-GUIDE-F6] More Details button calls onInfoClick without calling onToggle', async () => {
+    const onToggle = vi.fn()
+    const onInfoClick = vi.fn()
+    const user = userEvent.setup()
     render(
       <ActivityCard
         activity={MOCK_ACTIVITY}
         selected={false}
-        voteCount={2}
-        voterNames={['Alice', 'Bob']}
-        onToggle={vi.fn()}
+        onToggle={onToggle}
+        onInfoClick={onInfoClick}
       />
     )
-    expect(screen.getByText(/Alice/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /more details about Surfing at San Juan/i }))
+    expect(onInfoClick).toHaveBeenCalledWith(MOCK_ACTIVITY)
+    expect(onToggle).not.toHaveBeenCalled()
   })
 
-  it('[AC-ACTIVITIES-F8] is keyboard accessible — Enter key triggers onToggle', () => {
+  it('[AC-GUIDE-F5] keyboard Enter triggers onToggle', () => {
     const onToggle = vi.fn()
     render(
       <ActivityCard
         activity={MOCK_ACTIVITY}
         selected={false}
-        voteCount={0}
         onToggle={onToggle}
+        onInfoClick={vi.fn()}
       />
     )
     fireEvent.keyDown(screen.getByTestId('activity-card-surf-01'), { key: 'Enter' })
     expect(onToggle).toHaveBeenCalledWith('surf-01')
   })
 
-  it('[AC-ACTIVITIES-F8] data-testid uses activity id for resilient selection', () => {
+  it('[AC-GUIDE-S2] XSS: script in name is escaped text only', () => {
+    const bad: Activity = { ...MOCK_ACTIVITY, id: 'surf-xss2', name: '<script>alert(1)</script>' }
     const { container } = render(
+      <ActivityCard
+        activity={bad}
+        selected={false}
+        onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
+      />
+    )
+    expect(container.querySelector('script')).toBeNull()
+    expect(screen.getByText('<script>alert(1)</script>')).toBeInTheDocument()
+  })
+
+  it('[AC-GUIDE-F5] data-testid present for resilient selection', () => {
+    render(
       <ActivityCard
         activity={MOCK_ACTIVITY}
         selected={false}
-        voteCount={0}
         onToggle={vi.fn()}
+        onInfoClick={vi.fn()}
       />
     )
-    expect(container.querySelector('[data-testid="activity-card-surf-01"]')).toBeInTheDocument()
+    expect(screen.getByTestId('activity-card-surf-01')).toBeInTheDocument()
   })
 })

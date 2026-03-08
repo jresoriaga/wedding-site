@@ -1,11 +1,10 @@
 'use client'
 import type { Venue } from '@/app/lib/types'
+import { safeImageUrl } from '@/app/lib/filterVenues'
 
 interface RestaurantCardProps {
   venue: Venue
   selected: boolean
-  voteCount: number
-  voterNames?: string[]
   onToggle: (venueId: string) => void
   onInfoClick: (venue: Venue) => void
 }
@@ -19,129 +18,117 @@ const VIBE_COLORS: Record<string, string> = {
   'street food': 'bg-red-100 text-red-700',
 }
 
-// [AC-ITINPLAN0306-F5] [WCAG:1.3.1, 2.1.1]
-export default function RestaurantCard({
-  venue,
-  selected,
-  voteCount,
-  voterNames = [],
-  onToggle,
-  onInfoClick,
-}: RestaurantCardProps) {
-  function handleToggle(e: React.MouseEvent | React.KeyboardEvent) {
-    // Allow keyboard activation on the card itself
+const GRADIENT: Record<string, string> = {
+  breakfast: 'from-amber-400 to-orange-500',
+  lunch: 'from-sky-400 to-teal-500',
+  dinner: 'from-purple-500 to-indigo-600',
+}
+
+// [AC-GUIDE-F3, F4, F5, F6] Mobile-first restaurant card with hero image [WCAG:1.3.1, 2.1.1]
+export default function RestaurantCard({ venue, selected, onToggle, onInfoClick }: RestaurantCardProps) {
+  // [AC-GUIDE-S1] Only render validated https:// image URLs
+  const heroSrc = safeImageUrl(venue.imageUrl)
+
+  function handleCardClick(e: React.MouseEvent | React.KeyboardEvent) {
     if ('key' in e && e.key !== 'Enter' && e.key !== ' ') return
     onToggle(venue.id)
   }
 
   return (
-    // Outer div acts as a card container; remove button is a real <button> inside [WCAG:4.1.2]
     <div
       data-testid={`restaurant-card-${venue.id}`}
       role="button"
       tabIndex={0}
       aria-pressed={selected}
-      aria-label={`${venue.name}${selected ? ', selected — press to remove vote' : ' — press to vote'}`}
-      onClick={handleToggle}
-      onKeyDown={handleToggle}
+      aria-label={`${venue.name}${selected ? ', selected — press to deselect' : ' — press to select'}`}
+      onClick={handleCardClick}
+      onKeyDown={handleCardClick}
       className={`
-        w-full text-left rounded-2xl border-2 p-4 transition-all duration-200
+        w-full text-left rounded-2xl overflow-hidden border-2 transition-all duration-200
         focus:outline-none focus:ring-2 focus:ring-ocean focus:ring-offset-2
-        active:scale-[0.98] cursor-pointer group relative
+        active:scale-[0.98] cursor-pointer
         ${selected
-          ? 'border-ocean bg-ocean/5 shadow-md shadow-ocean/20'
-          : 'border-gray-200 bg-white hover:border-ocean/40 hover:shadow-sm'
+          ? 'border-ocean shadow-lg shadow-ocean/20'
+          : 'border-gray-200 bg-white hover:border-ocean/40 hover:shadow-md'
         }
       `}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3
-              className={`font-bold text-base truncate ${selected ? 'text-ocean' : 'text-gray-800'}`}
-            >
-              {/* [OWASP:A3] JSX renders names as text — no dangerouslySetInnerHTML [AC-ITINPLAN0306-S3] */}
-              {venue.name}
-            </h3>
+      {/* ── Hero image or gradient placeholder [AC-GUIDE-F3, F4, E1] ── */}
+      <div className="relative w-full" style={{ aspectRatio: '4/3' }}>
+        {heroSrc ? (
+          <img
+            src={heroSrc}
+            alt={venue.name}
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            data-testid="card-image-placeholder"
+            className={`w-full h-full bg-gradient-to-br ${GRADIENT[venue.category] ?? 'from-gray-300 to-gray-400'}`}
+          />
+        )}
+
+        {/* Selected checkmark overlay */}
+        {selected && (
+          <div
+            aria-hidden="true"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-ocean text-white flex items-center justify-center text-lg font-bold shadow-lg shadow-ocean/40 border-2 border-white"
+          >
+            ✓
           </div>
+        )}
 
-          <p className="text-gray-500 text-xs mb-2 truncate">
-            📍 {venue.address}
-          </p>
-
-          {venue.description && (
-            <p className="text-gray-600 text-sm leading-snug mb-3 line-clamp-2">
-              {venue.description}
-            </p>
-          )}
-
-          {/* Vibe tags */}
-          <div className="flex flex-wrap gap-1.5">
-            {venue.vibe.map((v) => (
-              <span
-                key={v}
-                className={`px-2 py-0.5 rounded-full text-xs font-medium ${VIBE_COLORS[v] ?? 'bg-gray-100 text-gray-600'}`}
-              >
-                {v}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Right side: vote badge or remove button */}
-        <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
-          {selected ? (
-            /* Explicit remove button [WCAG:2.4.6] */
-            <button
-              type="button"
-              aria-label={`Remove vote for ${venue.name}`}
-              onClick={(e) => {
-                e.stopPropagation() // prevent card click from re-toggling
-                onToggle(venue.id)
-              }}
-              className="w-10 h-10 rounded-full bg-coral text-white flex items-center justify-center text-lg font-bold shadow-sm shadow-coral/30 hover:bg-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-coral focus:ring-offset-2"
-            >
-              ✕
-            </button>
-          ) : (
-            <div
-              className={`
-                w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
-                ${voteCount > 0
-                  ? 'bg-coral text-white shadow-sm shadow-coral/30'
-                  : 'bg-gray-100 text-gray-400'
-                }
-              `}
-              aria-label={`${voteCount} vote${voteCount !== 1 ? 's' : ''}`}
-            >
-              {voteCount}
-            </div>
-          )}
-          {voterNames.length > 0 && (
-            <span className="text-xs text-gray-400" title={voterNames.join(', ')}>
-              votes
-            </span>
-          )}
+        {/* Time-of-day badge */}
+        <div className="absolute bottom-3 left-3">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-sm text-white text-xs font-semibold">
+            {venue.category}
+          </span>
         </div>
       </div>
 
-      {/* "Tap to vote / tap ✕ to remove" hint */}
-      {selected && (
-        <p className="text-xs text-ocean/70 mt-2 font-medium">✓ Your vote — tap ✕ to remove</p>
-      )}
+      {/* ── Card body ── */}
+      <div className={`p-4 ${selected ? 'bg-ocean/5' : 'bg-white'}`}>
+        {/* [OWASP:A3] JSX renders text — XSS safe [AC-GUIDE-S2] */}
+        <h3 className={`font-bold text-base leading-snug mb-1 ${selected ? 'text-ocean' : 'text-gray-800'}`}>
+          {venue.name}
+        </h3>
 
-      {/* See menu link — stopPropagation so the card vote toggle isn't also triggered */}
-      <div className="mt-3 pt-3 border-t border-gray-100">
+        <p className="text-gray-500 text-xs mb-2">{venue.address}</p>
+
+        {venue.hours && (
+          <p className="text-gray-400 text-xs mb-2">Hours: {venue.hours}</p>
+        )}
+
+        {venue.description && (
+          <p className="text-gray-600 text-sm leading-snug mb-3 line-clamp-2">
+            {venue.description}
+          </p>
+        )}
+
+        {/* Vibe tags */}
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          {venue.vibe.map((v) => (
+            <span
+              key={v}
+              className={`px-2 py-0.5 rounded-full text-xs font-medium ${VIBE_COLORS[v] ?? 'bg-gray-100 text-gray-600'}`}
+            >
+              {v}
+            </span>
+          ))}
+        </div>
+
+        {/* [AC-GUIDE-F6] More Details button — stopPropagation prevents card toggle */}
         <button
           type="button"
-          aria-label={`See menu and details for ${venue.name}`}
+          aria-label={`More details about ${venue.name}`}
           onClick={(e) => {
             e.stopPropagation()
             onInfoClick(venue)
           }}
-          className="text-xs font-semibold text-ocean hover:text-ocean/70 flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-ocean rounded transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-ocean/30 text-ocean text-sm font-semibold hover:bg-ocean/8 active:bg-ocean/15 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
         >
-          📌 See menu &amp; details
+          More Details →
         </button>
       </div>
     </div>

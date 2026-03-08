@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import MapView from '../MapView'
-import type { Venue, Vote } from '@/app/lib/types'
+import type { Venue, Activity, TripConfig } from '@/app/lib/types'
 
-// Mock @vis.gl/react-google-maps — spike 2 validates real integration
+// [AC-GUIDE-F7, F8, F12, F13, E3, E4, ERR2]
+
+// Mock @vis.gl/react-google-maps
 vi.mock('@vis.gl/react-google-maps', () => ({
   APIProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Map: ({ children }: { children?: React.ReactNode }) => (
@@ -17,62 +19,132 @@ vi.mock('@vis.gl/react-google-maps', () => ({
   ),
 }))
 
-const mockVenueMap: Record<string, Venue> = {
-  'b-01': {
-    id: 'b-01',
-    name: 'Elyu Café',
-    category: 'breakfast',
-    vibe: ['café'],
-    address: 'San Juan, La Union',
-    lat: 16.67,
-    lng: 120.32,
-  },
-  'l-01': {
-    id: 'l-01',
-    name: 'Flotsam Bar',
-    category: 'lunch',
-    vibe: ['bar'],
-    address: 'San Juan, La Union',
-    lat: 16.67,
-    lng: 120.321,
-  },
+const mockVenue: Venue = {
+  id: 'b-01',
+  name: 'Elyu Café',
+  category: 'breakfast',
+  vibe: ['café'],
+  address: 'San Juan, La Union',
+  lat: 16.67,
+  lng: 120.32,
+}
+
+const mockActivity: Activity = {
+  id: 'surf-01',
+  name: 'Surfing',
+  category: 'morning',
+  vibe: ['beach'],
+  address: 'Urbiztondo, La Union',
+  lat: 16.676,
+  lng: 120.322,
+}
+
+const mockTripConfig: TripConfig = {
+  id: 'main',
+  trip_name: 'La Union Trip',
+  start_date: '2026-04-10',
+  end_date: '2026-04-12',
+  stay_name: 'The Beach House',
+  stay_lat: 16.65,
+  stay_lng: 120.31,
+  updated_by: 'Joef',
+  updated_at: '2026-03-08',
 }
 
 describe('MapView', () => {
   beforeEach(() => {
-    // Simulate API key present — must match NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in .env.local
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', 'test-key')
   })
 
-  it('[AC-ITINPLAN0306-ERR3] shows fallback message when API key is missing', () => {
+  it('[AC-GUIDE-ERR2] shows fallback message when API key is missing', () => {
     vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', '')
-    render(<MapView votes={[]} venueMap={mockVenueMap} />)
+    render(
+      <MapView
+        selectedVenues={[]}
+        selectedActivities={[]}
+        tripConfig={null}
+      />
+    )
     expect(screen.getByTestId('map-view')).toBeInTheDocument()
     expect(screen.getByText(/map unavailable/i)).toBeInTheDocument()
   })
 
-  it('[AC-ITINPLAN0306-E4] shows placeholder message when no votes exist', () => {
-    render(<MapView votes={[]} venueMap={mockVenueMap} />)
+  it('[AC-GUIDE-E3] shows "tap cards" overlay when nothing is selected', () => {
+    render(
+      <MapView
+        selectedVenues={[]}
+        selectedActivities={[]}
+        tripConfig={null}
+      />
+    )
     expect(screen.getByTestId('map-view')).toBeInTheDocument()
-    expect(screen.getByText(/vote on venues/i)).toBeInTheDocument()
+    expect(screen.getByText(/tap cards to pin them here/i)).toBeInTheDocument()
   })
 
-  it('[AC-ITINPLAN0306-F8] renders map container with votes present', () => {
-    // votes now carry day prefix (d1:, d2:, d3:)
-    const votes: Vote[] = [
-      { id: 'v1', venue_id: 'd1:b-01', voter_name: 'Maria', created_at: '' },
-    ]
-    render(<MapView votes={votes} venueMap={mockVenueMap} />)
-    expect(screen.getByTestId('map-view')).toBeInTheDocument()
+  it('[AC-GUIDE-F13] renders stay pin when tripConfig is provided', () => {
+    render(
+      <MapView
+        selectedVenues={[]}
+        selectedActivities={[]}
+        tripConfig={mockTripConfig}
+      />
+    )
+    expect(screen.getByTestId('stay-pin')).toBeInTheDocument()
   })
 
-  it('[AC-ITINPLAN0306-F8] only renders markers for venues with ≥1 vote', () => {
-    const votes: Vote[] = [
-      { id: 'v1', venue_id: 'd1:b-01', voter_name: 'Maria', created_at: '' },
-    ]
-    render(<MapView votes={votes} venueMap={mockVenueMap} />)
+  it('[AC-GUIDE-E4] does not render stay pin when tripConfig is null', () => {
+    render(
+      <MapView
+        selectedVenues={[]}
+        selectedActivities={[]}
+        tripConfig={null}
+      />
+    )
+    expect(screen.queryByTestId('stay-pin')).not.toBeInTheDocument()
+  })
+
+  it('[AC-GUIDE-F8] renders marker for each selected venue', () => {
+    render(
+      <MapView
+        selectedVenues={[mockVenue]}
+        selectedActivities={[]}
+        tripConfig={null}
+      />
+    )
     expect(screen.getByTestId('marker-Elyu Café')).toBeInTheDocument()
-    // l-01 has 0 votes — no marker
-    expect(screen.queryByTestId('marker-Flotsam Bar')).not.toBeInTheDocument()
+  })
+
+  it('[AC-GUIDE-F8] renders marker for each selected activity', () => {
+    render(
+      <MapView
+        selectedVenues={[]}
+        selectedActivities={[mockActivity]}
+        tripConfig={null}
+      />
+    )
+    expect(screen.getByTestId('marker-Surfing')).toBeInTheDocument()
+  })
+
+  it('[AC-GUIDE-F8] renders both venue and activity pins simultaneously', () => {
+    render(
+      <MapView
+        selectedVenues={[mockVenue]}
+        selectedActivities={[mockActivity]}
+        tripConfig={null}
+      />
+    )
+    expect(screen.getByTestId('marker-Elyu Café')).toBeInTheDocument()
+    expect(screen.getByTestId('marker-Surfing')).toBeInTheDocument()
+  })
+
+  it('[AC-GUIDE-E3] hides "tap cards" overlay when items are selected', () => {
+    render(
+      <MapView
+        selectedVenues={[mockVenue]}
+        selectedActivities={[]}
+        tripConfig={null}
+      />
+    )
+    expect(screen.queryByText(/tap cards to pin them here/i)).not.toBeInTheDocument()
   })
 })

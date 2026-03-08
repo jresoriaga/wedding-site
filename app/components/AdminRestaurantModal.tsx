@@ -1,22 +1,25 @@
-'use client'
+﻿'use client'
 import { useState } from 'react'
-import type { Category, Vibe } from '@/app/lib/types'
+import type { Category, ActivityCategory, Vibe, ActivityVibe } from '@/app/lib/types'
 
-// [AC-ITINPLAN0306-F14] — Joef-only form to create a new restaurant
-// [SOLID:SRP] — single responsibility: restaurant creation form
+// [AC-ITINPLAN0306-F14] — Joef-only form to create a restaurant or activity
+// [SOLID:SRP] — single responsibility: content item creation form
 // [WCAG:1.3.1, 3.3.1, 4.1.3]
 
 interface AdminRestaurantModalProps {
-  onCreated: () => void
+  onCreated: (type: 'restaurant' | 'activity') => void
   onClose: () => void
 }
 
-const ALL_VIBES: Vibe[] = ['party', 'casual dining', 'buffet', 'bar', 'café', 'street food']
+type ItemType = 'restaurant' | 'activity'
+
+const RESTAURANT_VIBES: Vibe[] = ['party', 'casual dining', 'buffet', 'bar', 'café', 'street food']
+const ACTIVITY_VIBES: ActivityVibe[] = ['beach', 'adventure', 'sightseeing', 'leisure', 'nightlife', 'nature']
 
 interface FormState {
   name: string
-  category: Category | ''
-  vibe: Vibe[]
+  category: Category | ActivityCategory | ''
+  vibe: (Vibe | ActivityVibe)[]
   address: string
   lat: string
   lng: string
@@ -40,17 +43,25 @@ function validateForm(f: FormState): Partial<Record<keyof FormState, string>> {
 }
 
 export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestaurantModalProps) {
+  const [itemType, setItemType] = useState<ItemType>('restaurant')
   const [form, setForm] = useState<FormState>(INITIAL)
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [serverError, setServerError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  function handleTypeChange(type: ItemType) {
+    setItemType(type)
+    setForm(INITIAL)
+    setErrors({})
+    setServerError(null)
+  }
 
   function handleField(field: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => { const next = { ...prev }; delete next[field]; return next })
   }
 
-  function toggleVibe(v: Vibe) {
+  function toggleVibe(v: Vibe | ActivityVibe) {
     setForm((prev) => ({
       ...prev,
       vibe: prev.vibe.includes(v) ? prev.vibe.filter((x) => x !== v) : [...prev.vibe, v],
@@ -68,8 +79,10 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
     setSubmitting(true)
     setServerError(null)
 
+    const endpoint = itemType === 'restaurant' ? '/api/restaurants' : '/api/activities'
+
     try {
-      const res = await fetch('/api/restaurants', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -77,7 +90,7 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
         },
         body: JSON.stringify({
           name: form.name.trim(),
-          category: form.category as Category,
+          category: form.category,
           vibe: form.vibe,
           address: form.address.trim(),
           lat: Number(form.lat),
@@ -89,17 +102,20 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
 
       const json = await res.json()
       if (!res.ok) {
-        setServerError(json.error ?? 'Failed to create restaurant')
+        setServerError(json.error ?? `Failed to create ${itemType}`)
         return
       }
 
-      onCreated()
+      onCreated(itemType)
     } catch {
       setServerError('Network error — please try again')
     } finally {
       setSubmitting(false)
     }
   }
+
+  const isRestaurant = itemType === 'restaurant'
+  const vibes = isRestaurant ? RESTAURANT_VIBES : ACTIVITY_VIBES
 
   return (
     <div
@@ -113,7 +129,7 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
           <h2 id="admin-modal-title" className="text-lg font-bold text-gray-800">
-            ➕ Add Restaurant
+            Add {isRestaurant ? 'Restaurant' : 'Activity'}
           </h2>
           <button
             type="button"
@@ -121,22 +137,47 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
             aria-label="Close form"
             className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
           >
-            ✕
+            x
           </button>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} noValidate className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+
+          {/* Type toggle */}
+          <div>
+            <fieldset>
+              <legend className="text-xs font-semibold text-gray-700 mb-1">Type</legend>
+              <div className="flex gap-2">
+                {(['restaurant', 'activity'] as ItemType[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={itemType === type}
+                    onClick={() => handleTypeChange(type)}
+                    className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-colors focus:outline-none focus:ring-2 focus:ring-ocean capitalize ${
+                      itemType === type
+                        ? 'bg-ocean text-white border-ocean'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-ocean'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+
           {serverError && (
             <div role="alert" className="text-xs text-coral font-medium bg-coral/10 px-3 py-2 rounded-xl">
-              ⚠️ {serverError}
+              {serverError}
             </div>
           )}
 
           {/* Name */}
           <div>
             <label htmlFor="r-name" className="block text-xs font-semibold text-gray-700 mb-1">
-              Restaurant Name <span aria-hidden="true" className="text-coral">*</span>
+              {isRestaurant ? 'Restaurant' : 'Activity'} Name <span aria-hidden="true" className="text-coral">*</span>
             </label>
             <input
               id="r-name"
@@ -146,7 +187,7 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
               aria-invalid={!!errors.name}
               aria-describedby={errors.name ? 'r-name-err' : undefined}
               className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-ocean ${errors.name ? 'border-coral' : 'border-gray-200'}`}
-              placeholder="El Union Coffee"
+              placeholder={isRestaurant ? 'El Union Coffee' : 'Surfing at Urbiztondo Beach'}
             />
             {errors.name && <p id="r-name-err" role="alert" className="text-xs text-coral mt-1">{errors.name}</p>}
           </div>
@@ -164,9 +205,19 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
               className={`w-full px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-ocean ${errors.category ? 'border-coral' : 'border-gray-200'}`}
             >
               <option value="">Select category…</option>
-              <option value="breakfast">🌅 Breakfast</option>
-              <option value="lunch">🍜 Lunch</option>
-              <option value="dinner">🌇 Dinner</option>
+              {isRestaurant ? (
+                <>
+                  <option value="breakfast">Breakfast</option>
+                  <option value="lunch">Lunch</option>
+                  <option value="dinner">Dinner</option>
+                </>
+              ) : (
+                <>
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="evening">Evening</option>
+                </>
+              )}
             </select>
             {errors.category && <p role="alert" className="text-xs text-coral mt-1">{errors.category}</p>}
           </div>
@@ -176,7 +227,7 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
             <fieldset>
               <legend className="text-xs font-semibold text-gray-700 mb-1">Vibe</legend>
               <div className="flex flex-wrap gap-2">
-                {ALL_VIBES.map((v) => (
+                {vibes.map((v) => (
                   <button
                     key={v}
                     type="button"
@@ -270,7 +321,7 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
               onChange={(e) => handleField('description', e.target.value)}
               rows={3}
               className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-ocean resize-none"
-              placeholder="A short description of the restaurant…"
+              placeholder={isRestaurant ? 'A short description of the restaurant…' : 'A short description of the activity…'}
             />
           </div>
 
@@ -287,10 +338,10 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
             <button
               type="submit"
               disabled={submitting}
-              aria-label="Add restaurant"
+              aria-label={`Add ${itemType}`}
               className="flex-1 py-2.5 rounded-xl bg-ocean text-white text-sm font-semibold hover:bg-ocean/90 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean focus:ring-offset-2 disabled:opacity-60"
             >
-              {submitting ? '⏳ Adding…' : '➕ Add restaurant'}
+              {submitting ? 'Adding...' : `Add ${itemType}`}
             </button>
           </div>
         </form>
@@ -298,3 +349,4 @@ export default function AdminRestaurantModal({ onCreated, onClose }: AdminRestau
     </div>
   )
 }
+

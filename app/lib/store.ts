@@ -39,10 +39,12 @@ interface AppState {
   // Live venue list (DB-first, falls back to static)
   venues: Venue[]
   setVenues: (venues: Venue[]) => void
+  updateVenue: (venue: Venue) => void
 
   // Live activity list (DB-first, falls back to static)
   activityVenues: Activity[]
   setActivityVenues: (activities: Activity[]) => void
+  updateActivity: (activity: Activity) => void
 
   // SSE connection state
   isReconnecting: boolean
@@ -100,9 +102,11 @@ export const useAppStore = create<AppState>((set) => ({
 
   venues: RESTAURANTS,
   setVenues: (venues) => set({ venues }),
+  updateVenue: (venue) => set((state) => ({ venues: state.venues.map(v => v.id === venue.id ? venue : v) })),
 
   activityVenues: ACTIVITIES,
   setActivityVenues: (activities) => set({ activityVenues: activities }),
+  updateActivity: (activity) => set((state) => ({ activityVenues: state.activityVenues.map(a => a.id === activity.id ? activity : a) })),
 
   isReconnecting: false,
   setIsReconnecting: (v) => set({ isReconnecting: v }),

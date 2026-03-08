@@ -6,19 +6,33 @@ import type { Venue } from '@/app/lib/types'
 // [SOLID:SRP] — each handler does one thing
 // [OWASP:A3] — body parsed via JSON, no string concatenation
 
-// GET /api/restaurants — returns all venues from DB, falls back to static list
+// GET /api/restaurants — returns all venues, with featured image from restaurant_images
 export async function GET() {
   try {
     const supabase = createServerClient()
-    const { data, error } = await supabase
+    const { data: restaurants, error } = await supabase
       .from('restaurants')
       .select('*')
       .order('category')
 
-    if (error || !data || data.length === 0) {
+    if (error || !restaurants || restaurants.length === 0) {
       return NextResponse.json(RESTAURANTS)
     }
-    return NextResponse.json(data)
+
+    // Fetch featured images for all venues in one query — avoids N+1 [vercel-react-best-practices]
+    const { data: featured } = await supabase
+      .from('restaurant_images')
+      .select('venue_id, image_url')
+      .eq('is_featured', true)
+
+    const featuredMap: Record<string, string> = {}
+    for (const img of featured ?? []) {
+      featuredMap[img.venue_id as string] = img.image_url as string
+    }
+
+    return NextResponse.json(
+      restaurants.map((r) => ({ ...r, imageUrl: featuredMap[r.id] ?? undefined }))
+    )
   } catch {
     return NextResponse.json(RESTAURANTS)
   }
@@ -68,6 +82,7 @@ export async function POST(req: Request) {
       lng: body.lng,
       hours: body.hours ?? null,
       description: body.description ?? null,
+      // imageUrl not stored on restaurants — featured images live in restaurant_images
     })
     .select()
     .single()

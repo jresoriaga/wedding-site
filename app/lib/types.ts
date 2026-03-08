@@ -5,6 +5,9 @@ export type Category = 'breakfast' | 'lunch' | 'dinner'
 // ── Activities ───────────────────────────────────────────────────────────────
 export type ActivityCategory = 'morning' | 'afternoon' | 'evening'
 
+// [AC-GUIDE-F1] Unified time-of-day filter (restaurants + activities in one feed)
+export type TimeOfDay = 'morning' | 'afternoon' | 'evening'
+
 export type ActivityVibe =
   | 'beach'
   | 'adventure'
@@ -23,6 +26,7 @@ export interface Activity {
   lng: number
   description?: string
   hours?: string
+  imageUrl?: string  // [AC-GUIDE-F3] optional hero image
 }
 
 export interface ActivityVote {

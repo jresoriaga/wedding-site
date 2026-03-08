@@ -6,6 +6,7 @@ import { useAppStore } from '@/app/lib/store'
 
 interface VenueDetailModalProps {
   venue: Venue
+  onEdit?: () => void
   onClose: () => void
 }
 
@@ -25,19 +26,22 @@ const CATEGORY_EMOJI: Record<string, string> = {
 }
 
 // [WCAG:1.3.1, 2.1.1, 2.4.3]
-export default function VenueDetailModal({ venue, onClose }: VenueDetailModalProps) {
+export default function VenueDetailModal({ venue, onEdit, onClose }: VenueDetailModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const userName = useAppStore((s) => s.userName)
+  const updateVenue = useAppStore((s) => s.updateVenue)
   const isJoef = userName === 'Joef'
 
-  // [AC-ITINPLAN0306-F13] persistent images from Supabase via API
   const { images, isLoading: imagesLoading, refetch } = useVenueImages(venue.id)
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [settingFeatured, setSettingFeatured] = useState(false)
+  // Track locally so the modal reflects the update immediately after PATCH
+  const [featuredUrl, setFeaturedUrl] = useState(venue.imageUrl ?? '')
 
   // Reset carousel index when venue changes
   useEffect(() => { setCurrentIndex(0) }, [venue.id])
@@ -86,6 +90,25 @@ export default function VenueDetailModal({ venue, onClose }: VenueDetailModalPro
     setCurrentIndex(Math.max(0, images.length - 1))
   }
 
+  // [OWASP:A1] Set featured image — Joef only, server validates x-created-by header
+  async function handleSetFeatured(imageUrl: string) {
+    if (imageUrl === featuredUrl || settingFeatured) return
+    setSettingFeatured(true)
+    try {
+      const res = await fetch(`/api/restaurants/${venue.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'x-created-by': 'Joef' },
+        body: JSON.stringify({ imageUrl }),
+      })
+      if (res.ok) {
+        const updated = await res.json()
+        setFeaturedUrl(imageUrl)
+        updateVenue(updated)
+      }
+    } catch { /* silent — user can retry */ }
+    setSettingFeatured(false)
+  }
+
   const currentImage = images[currentIndex] ?? null
 
   return (
@@ -110,14 +133,27 @@ export default function VenueDetailModal({ venue, onClose }: VenueDetailModalPro
             </div>
             <p className="text-gray-500 text-xs truncate">📍 {venue.address}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close details"
-            className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Edit button — Joef only */}
+            {isJoef && onEdit && (
+              <button
+                type="button"
+                onClick={onEdit}
+                aria-label="Edit restaurant"
+                className="px-3 py-1.5 rounded-xl border border-ocean/30 text-ocean text-xs font-semibold hover:bg-ocean/10 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
+              >
+                Edit
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close details"
+              className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
+            >
+              x
+            </button>
+          </div>
         </div>
 
         {/* ── Scrollable body ── */}
@@ -215,14 +251,31 @@ export default function VenueDetailModal({ venue, onClose }: VenueDetailModalPro
                 )}
 
                 {/* Thumbnail strip */}
-                {images.length > 1 && (
+                {images.length > 0 && (
                   <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
                     {images.map((img, i) => (
-                      <button key={img.id} type="button" aria-label={`View photo ${i + 1}`} onClick={() => setCurrentIndex(i)}
-                        className={`flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all focus:outline-none focus:ring-2 focus:ring-ocean ${i === currentIndex ? 'border-ocean' : 'border-transparent opacity-60 hover:opacity-100'}`}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img.image_url} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover" />
-                      </button>
+                      <div key={img.id} className="relative flex-shrink-0">
+                        <button type="button" aria-label={`View photo ${i + 1}`} onClick={() => setCurrentIndex(i)}
+                          className={`w-14 h-14 rounded-xl overflow-hidden border-2 transition-all focus:outline-none focus:ring-2 focus:ring-ocean block ${i === currentIndex ? 'border-ocean' : 'border-transparent opacity-60 hover:opacity-100'}`}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img.image_url} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover" />
+                        </button>
+                        {/* Set as Featured star — Joef only */}
+                        {isJoef && (
+                          <button
+                            type="button"
+                            aria-label={img.image_url === featuredUrl ? 'Featured image' : 'Set as featured card image'}
+                            aria-pressed={img.image_url === featuredUrl}
+                            onClick={() => handleSetFeatured(img.image_url)}
+                            disabled={settingFeatured}
+                            className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full border border-white flex items-center justify-center text-[9px] font-bold shadow transition-all focus:outline-none focus:ring-2 focus:ring-ocean disabled:opacity-50 ${
+                              img.image_url === featuredUrl ? 'bg-ocean text-white' : 'bg-gray-100 text-gray-400 hover:bg-ocean hover:text-white'
+                            }`}
+                          >
+                            ★
+                          </button>
+                        )}
+                      </div>
                     ))}
                     {/* Add more — Joef only */}
                     {isJoef && (
