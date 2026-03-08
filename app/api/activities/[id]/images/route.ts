@@ -7,6 +7,7 @@ const BUCKET = 'restaurant-images' // reuse same bucket, just different folder p
 type Params = { params: Promise<{ id: string }> }
 
 // GET /api/activities/[id]/images — public, lists images for an activity
+// Anon key is fine here because RLS is disabled on activity_images
 export async function GET(_req: Request, { params }: Params) {
   try {
     const { id } = await params

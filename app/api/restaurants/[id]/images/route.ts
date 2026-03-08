@@ -7,6 +7,7 @@ const BUCKET = 'restaurant-images'
 type Params = { params: Promise<{ id: string }> }
 
 // GET /api/restaurants/[id]/images — public, lists images for a venue [AC-ITINPLAN0306-F13]
+// Anon key is fine here because RLS is disabled on restaurant_images
 export async function GET(_req: Request, { params }: Params) {
   try {
     const { id } = await params

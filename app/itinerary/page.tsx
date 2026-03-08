@@ -17,8 +17,8 @@ import AdminEditModal from '@/app/components/AdminEditModal'
 import TripConfigModal from '@/app/components/TripConfigModal'
 import { useRestaurants } from '@/app/hooks/useRestaurants'
 import { useTripConfig } from '@/app/hooks/useTripConfig'
-import { useItineraryDownload } from '@/app/hooks/useItineraryDownload'
 import { useActivityImages } from '@/app/hooks/useActivityImages'
+import MapImageModal from '@/app/components/MapImageModal'
 import { ErrorBoundary } from '@/app/components/ErrorBoundary'
 
 const ACTIVITY_VIBE_COLORS: Record<string, string> = {
@@ -324,10 +324,10 @@ function ItineraryContent() {
   const [editItem, setEditItem] = useState<Venue | Activity | null>(null)
   const [editItemType, setEditItemType] = useState<'restaurant' | 'activity'>('restaurant')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [showMapImage, setShowMapImage] = useState(false)
 
   useTripConfig()
   const { refetch: refetchRestaurants } = useRestaurants()
-  const { download: downloadItinerary, loading: pdfLoading, error: pdfError, setError: setPdfError } = useItineraryDownload()
 
   // [AC-GUIDE-ERR1] Fetch activities from DB once; static ACTIVITIES fallback already in store
   useEffect(() => {
@@ -431,20 +431,13 @@ function ItineraryContent() {
 
           <div className="flex-shrink-0 flex flex-col items-end gap-2">
             <div className="flex gap-2">
-              {/* [AC-AITINPDF-F1] Download PDF */}
               <button
                 type="button"
-                onClick={() => { setPdfError(null); downloadItinerary() }}
-                disabled={pdfLoading}
-                aria-label="Download PDF itinerary"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-ocean/30 bg-ocean/5 text-ocean text-xs font-semibold hover:bg-ocean/15 disabled:opacity-60 disabled:cursor-wait transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
+                onClick={() => setShowMapImage(true)}
+                aria-label="Generate cartoon map image"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-ocean/30 bg-ocean/5 text-ocean text-xs font-semibold hover:bg-ocean/15 transition-colors focus:outline-none focus:ring-2 focus:ring-ocean"
               >
-                {pdfLoading ? (
-                  <>
-                    <span className="inline-block w-3 h-3 rounded-full border-2 border-ocean border-t-transparent animate-spin" aria-hidden="true" />
-                    Generating...
-                  </>
-                ) : 'Download PDF'}
+                🗺️ Our Map
               </button>
               <button
                 type="button"
@@ -485,22 +478,6 @@ function ItineraryContent() {
             </button>
           </div>
         </div>
-
-        {/* PDF error banner */}
-        {pdfError && (
-          <div
-            role="alert"
-            className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-medium animate-fade-in"
-          >
-            <span>Error: {pdfError}</span>
-            <button
-              type="button"
-              onClick={() => setPdfError(null)}
-              aria-label="Dismiss error"
-              className="text-red-400 hover:text-red-600 text-sm"
-            >x</button>
-          </div>
-        )}
 
         {/* [AC-GUIDE-F7] Inline map panel */}
         {showMap && (
@@ -671,6 +648,16 @@ function ItineraryContent() {
           itemType={editItemType}
           onSaved={() => setEditItem(null)}
           onClose={() => setEditItem(null)}
+        />
+      )}
+
+      {/* Map image generator */}
+      {showMapImage && (
+        <MapImageModal
+          selectedVenues={selectedVenues}
+          selectedActivities={selectedActivities}
+          tripConfig={tripConfig}
+          onClose={() => setShowMapImage(false)}
         />
       )}
     </>

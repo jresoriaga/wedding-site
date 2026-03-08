@@ -45,7 +45,16 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json({ error: 'vibe must be an array' }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
+  // Initialise admin client inside a try/catch so a missing/wrong SUPABASE_SERVICE_ROLE_KEY
+  // returns a proper JSON 500 instead of crashing Next.js into an HTML error page
+  let supabase: ReturnType<typeof createAdminClient>
+  try {
+    supabase = createAdminClient()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Server configuration error'
+    console.error('[PATCH activities] createAdminClient failed:', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
 
   // Update activity table fields (if any changed)
   let activityRow: Record<string, unknown> | null = null
